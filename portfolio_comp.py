@@ -4,6 +4,7 @@ import argparse
 import yfinance as yf
 import warnings
 from tabulate import tabulate
+from datetime import datetime, timedelta
 
 # Suppress FutureWarnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -25,7 +26,19 @@ def read_csv_files(directory):
 
     return valid_transactions
 
-def fetch_stock_price(symbol):
+def fetch_stock_price(symbol, start_date):
+    try:
+        start_date = datetime.strptime(start_date, "%m/%d/%y").strftime("%Y-%m-%d")
+        stock = yf.Ticker(symbol)
+        end_date = (datetime.strptime(start_date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+        history = stock.history(period="1d", start=start_date, end=end_date)
+        stock_price = history['Close'][0]
+        return stock_price
+    except Exception as e:
+        print(f"Error fetching stock price for {symbol}: {str(e)}")
+        return None
+
+def fetch_current_stock_price(symbol):
     try:
         stock = yf.Ticker(symbol)
         history = stock.history(period="1d")
@@ -45,18 +58,26 @@ def main():
 
     # Create dictionaries to store data for each symbol
     symbol_data = {}
+    total_qqq_qty = 0
+    total_qqq_cost = 0
 
     for transaction in valid_transactions:
         symbol = transaction['Symbol']
         quantity = int(transaction['Quantity'])
         price = float(transaction['Price'])
+        amount = float(transaction['Amount'])
+        txn_date = transaction['TransactionDate']
 
         # Fetch the most recent stock price
-        stock_price = fetch_stock_price(symbol)
+        stock_price = fetch_current_stock_price(symbol)
+        print(f"Most recent price {symbol} {stock_price:.2f}")
 
         if stock_price is not None:
             # Calculate the profit/loss
             profit_loss = (stock_price - price) * quantity
+            qqq_price = fetch_stock_price("QQQ", txn_date)
+            total_qqq_qty += float(price * quantity /qqq_price)
+            total_qqq_cost += float(price * quantity)
 
             if symbol in symbol_data:
                 symbol_data[symbol]['num_transactions'] += 1
@@ -86,8 +107,12 @@ def main():
     total_cost = sum(data['total_cost'] for data in symbol_data.values())
     total_profit = sum(data['profit'] for data in symbol_data.values())
     total_profit_percentage = (total_profit / total_cost) * 100
+    total_qqq_amount = total_qqq_qty * fetch_current_stock_price("QQQ")
 
     print(f"Total cost: {total_cost:.2f}, total profit: {total_profit:.2f}, % profit: {total_profit_percentage:.2f}")
+    total_qqq_profit = total_qqq_amount - total_qqq_cost
+    qqq_perc_profit = total_qqq_profit/total_qqq_cost * 100.0
+    print(f"QQQ cost:{total_qqq_cost:.2f} qqq profit: {total_qqq_profit:.2f} % profit: {qqq_perc_profit:.2f}")
 
 if __name__ == "__main__":
     main()
