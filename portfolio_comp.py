@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 # Suppress FutureWarnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
+renames = {"FB": "META"}
+
 def read_csv_files(directory):
     valid_transactions = []
 
@@ -21,6 +23,8 @@ def read_csv_files(directory):
             reader = csv.DictReader(file)
             
             for row in reader:
+                if row["Symbol"] in renames.keys():
+                  row["Symbol"] = renames[row["Symbol"]]
                 if row['TransactionType'] == 'Bought' and int(row['Quantity']) != 0 and "STK SPLIT ON" not in row['Description']:
                     valid_transactions.append(row)
 
@@ -60,6 +64,7 @@ def main():
     symbol_data = {}
     total_qqq_qty = 0
     total_qqq_cost = 0
+    recent_prices = {}
 
     for transaction in valid_transactions:
         symbol = transaction['Symbol']
@@ -69,9 +74,11 @@ def main():
         txn_date = transaction['TransactionDate']
 
         # Fetch the most recent stock price
-        stock_price = fetch_current_stock_price(symbol)
-        print(f"Most recent price {symbol} {stock_price:.2f}")
+        if symbol not in recent_prices:
+          recent_prices[symbol] = fetch_current_stock_price(symbol)
+          print(f"Most recent price {symbol} {recent_prices[symbol]:.2f}")
 
+        stock_price = recent_prices[symbol]
         if stock_price is not None:
             # Calculate the profit/loss
             profit_loss = (stock_price - price) * quantity
@@ -89,6 +96,8 @@ def main():
                     'total_cost': price * quantity,
                     'profit': profit_loss
                 }
+        else:
+          print(f"Can't fetch current price for {symbol}")
 
     # Convert the symbol data into a list for tabulation
     table_data = [
