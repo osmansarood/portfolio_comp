@@ -1,3 +1,5 @@
 requests
+yahoofinance
 tabulate
+python-dateutil
 yfinance

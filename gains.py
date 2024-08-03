@@ -2,6 +2,26 @@ import csv
 from dataclasses import dataclass
 from dateutil.parser import parse
 from datetime import datetime
+import yfinance as yf
+from datetime import datetime, timedelta
+
+def add_one_day(date_str):
+    # Convert the string to a datetime object
+    date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+    # Add one day
+    next_day = date_obj + timedelta(days=1)
+    # Convert the datetime object back to a string
+    next_day_str = next_day.strftime('%Y-%m-%d')
+    return next_day_str
+
+def get_stock_price(symbol, date):
+    stock = yf.Ticker(symbol)
+    print('ssss ', stock, date, add_one_day(date))
+    hist = stock.history(start=date, end=add_one_day(date))
+    if not hist.empty:
+        return hist['Close'].iloc[0]
+    else:
+        return None
 
 @dataclass
 class LotInfo:
@@ -113,5 +133,6 @@ for lot in lots:
           f"Days Gain: {lot.days_gain}, Total Gain: {lot.total_gain}, Total Gain %: {lot.total_gain_percent}, "
           f"Value: {lot.value}, CAGR: {lot.cagr:.2%}")
 
+print('====== ', get_stock_price('AAPL', '2024-07-03'))
 print(f"\nWeighted Average CAGR: {weighted_average_cagr:.2%}")
 
