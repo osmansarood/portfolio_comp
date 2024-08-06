@@ -1,9 +1,17 @@
 import csv
 from dataclasses import dataclass
 from dateutil.parser import parse
-from datetime import datetime
 import yfinance as yf
 from datetime import datetime, timedelta
+
+stocks = {}
+
+def convert_date_format(date_str):
+    # Convert the string to a datetime object with the given format
+    date_obj = datetime.strptime(date_str, '%m/%d/%Y')
+    # Convert the datetime object to a string in the new format
+    new_date_str = date_obj.strftime('%Y-%m-%d')
+    return new_date_str
 
 def add_one_day(date_str):
     # Convert the string to a datetime object
@@ -14,14 +22,18 @@ def add_one_day(date_str):
     next_day_str = next_day.strftime('%Y-%m-%d')
     return next_day_str
 
-def get_stock_price(symbol, date):
-    stock = yf.Ticker(symbol)
-    print('ssss ', stock, date, add_one_day(date))
+def get_stock_price(symbol, date, itr=5):
+    if not itr:
+        return None
+    if symbol not in stocks:
+        stocks[symbol] = yf.Ticker(symbol)
+    stock = stocks[symbol]
     hist = stock.history(start=date, end=add_one_day(date))
     if not hist.empty:
+        print(f'Price fetch {stock} {date} {add_one_day(date)} {hist["Close"].iloc[0]}')
         return hist['Close'].iloc[0]
     else:
-        return None
+        return get_stock_price(symbol, add_one_day(date), itr-1)
 
 @dataclass
 class LotInfo:
@@ -45,6 +57,8 @@ def is_date(string):
 def calculate_cagr(start_value, end_value, years):
     if years == 0:
         return 0.0
+    if years < 1:
+        years = 1
     return ((end_value / start_value) ** (1 / years)) - 1
 
 def find_index(expected_map, col):
@@ -86,6 +100,8 @@ def parse_csv(file_path):
                     date = row[map['Date']].strip()
                     qty = float(row[map['Quantity']].strip())
                     price_paid = float(row[map['Price Paid']].strip())
+                    if current_symbol == 'AAPL':
+                        price_paid = get_stock_price(current_symbol, convert_date_format(date))
                     days_gain = float(row[map['Day Gain']].strip())
                     total_gain = float(row[map['Total Gain']].strip())
                     total_gain_percent = float(row[map['Total Gain %']].strip())
@@ -133,6 +149,5 @@ for lot in lots:
           f"Days Gain: {lot.days_gain}, Total Gain: {lot.total_gain}, Total Gain %: {lot.total_gain_percent}, "
           f"Value: {lot.value}, CAGR: {lot.cagr:.2%}")
 
-print('====== ', get_stock_price('AAPL', '2024-07-03'))
 print(f"\nWeighted Average CAGR: {weighted_average_cagr:.2%}")
 
