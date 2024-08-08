@@ -3,8 +3,57 @@ from dataclasses import dataclass
 from dateutil.parser import parse
 import yfinance as yf
 from datetime import datetime, timedelta
+import matplotlib.pyplot as plt
 
-stocks = {}
+# Usage example:
+PATHS = [
+    # '/Users/osman/Downloads/PortfolioDownload_ssr_aug3.csv',
+    '/Users/osman/Downloads/PortfolioDownload_os.csv',  # Replace with your actual file path
+]
+
+
+class StockInfo:
+    def __init__(self, symbol):
+        self.symbol = symbol
+        self.qty = 0
+        self.value = 0.0
+        self.gain = 0.0
+
+
+class Portfolio:
+    def __init__(self):
+        self.portfolio = {}
+        self.lots = []
+
+    def plot_timeline(self):
+        dates = []
+        values = []
+        for l in self.lots:
+            dates.append(datetime.strptime(l.date, '%m/%d/%Y'))
+            values.append(l.value)
+
+        print(dates)
+        print(values)
+        # Create a plot
+        plt.scatter(dates, values)
+
+        # Add labels and title
+        plt.xlabel('Date')
+        plt.ylabel('Value')
+        plt.title('Values Over Time')
+
+        # Format the x-axis to show dates clearly
+        plt.gcf().autofmt_xdate()  # Auto-format the date labels
+
+        # Show the plot
+        plt.show()
+
+    def add_lots(self, l):
+        self.lots += l
+
+
+port = Portfolio()
+
 
 def convert_date_format(date_str):
     # Convert the string to a datetime object with the given format
@@ -12,6 +61,7 @@ def convert_date_format(date_str):
     # Convert the datetime object to a string in the new format
     new_date_str = date_obj.strftime('%Y-%m-%d')
     return new_date_str
+
 
 def add_one_day(date_str):
     # Convert the string to a datetime object
@@ -22,6 +72,7 @@ def add_one_day(date_str):
     next_day_str = next_day.strftime('%Y-%m-%d')
     return next_day_str
 
+
 def get_stock_price(symbol, date, itr=5):
     if not itr:
         return None
@@ -30,10 +81,11 @@ def get_stock_price(symbol, date, itr=5):
     stock = stocks[symbol]
     hist = stock.history(start=date, end=add_one_day(date))
     if not hist.empty:
-        print(f'Price fetch {stock} {date} {add_one_day(date)} {hist["Close"].iloc[0]}')
+        print(f'Price fetch {symbol} {date} {add_one_day(date)} {hist["Close"].iloc[0]}')
         return hist['Close'].iloc[0]
     else:
-        return get_stock_price(symbol, add_one_day(date), itr-1)
+        return get_stock_price(symbol, add_one_day(date), itr - 1)
+
 
 @dataclass
 class LotInfo:
@@ -47,12 +99,14 @@ class LotInfo:
     value: float
     cagr: float = 0.0  # To store the annualized gain percentage
 
+
 def is_date(string):
     try:
         parse(string)
         return True
     except ValueError:
         return False
+
 
 def calculate_cagr(start_value, end_value, years):
     if years == 0:
@@ -61,11 +115,13 @@ def calculate_cagr(start_value, end_value, years):
     #     years = 1
     return ((end_value / start_value) ** (1 / years)) - 1
 
+
 def find_index(expected_map, col):
     for k, v in expected_map.items():
         if col in v:
             return k
     return None
+
 
 def determine_header_map(header):
     map = {
@@ -89,6 +145,7 @@ def determine_header_map(header):
 
 def parse_csv(file_path):
     lots = []
+    print(f'Reading file:{file_path}')
     current_symbol = None
     with open(file_path, 'r') as file:
         reader = csv.reader(file)
@@ -119,13 +176,15 @@ def parse_csv(file_path):
                     end_value = value
                     cagr = calculate_cagr(start_value, end_value, years_held)
 
-                    lot = LotInfo(current_symbol, date, qty, price_paid, days_gain, total_gain, total_gain_percent, value, cagr)
+                    lot = LotInfo(current_symbol, date, qty, price_paid, days_gain, total_gain, total_gain_percent,
+                                  value, cagr)
                     lots.append(lot)
                 except ValueError as e:
                     print(f"Error parsing row: {row} - {e}")
             else:
                 current_symbol = row[0].strip()
     return lots
+
 
 def calculate_weighted_average_cagr(lots):
     total_weight = 0.0
@@ -134,48 +193,41 @@ def calculate_weighted_average_cagr(lots):
         weight = lot.price_paid * lot.qty
         total_weight += weight
         weighted_cagr_sum += lot.cagr * weight
-    
+
     if total_weight == 0:
         return 0.0
     return weighted_cagr_sum / total_weight
 
-# Usage example:
-# file_path = '/Users/osman/Downloads/PortfolioDownload_os.csv'  # Replace with your actual file path
-file_path = '/Users/osman/Downloads/PortfolioDownload_ssr_aug3.csv'
-lots = parse_csv(file_path)
 
-weighted_average_cagr = calculate_weighted_average_cagr(lots)
+if __name__ == '__main__':
 
-portfolio = {}
-class StockInfo:
-    def __init__(self, symbol):
-        self.symbol = symbol
-        self.qty = 0
-        self.value = 0.0
-        self.gain = 0.0
+    stocks = {}
 
+    total_value = 0.0
+    total_gain = 0.0
 
-portfolio = {}
+    for file_path in PATHS:
+        port.add_lots(parse_csv(file_path))
+        weighted_average_cagr = calculate_weighted_average_cagr(port.lots)
 
-for lot in lots:
-    print(f"Symbol: {lot.symbol}, Date: {lot.date}, Qty: {lot.qty}, Price Paid: {lot.price_paid}, "
-          f"Days Gain: {lot.days_gain}, Total Gain: {lot.total_gain}, Total Gain %: {lot.total_gain_percent}, "
-          f"Value: {lot.value}, CAGR: {lot.cagr:.2%}")
-    if lot.symbol not in portfolio:
-        portfolio[lot.symbol] = StockInfo(lot.symbol)
+    print(f"\nWeighted Average CAGR: {weighted_average_cagr:.2%}")
 
-    portfolio[lot.symbol].qty += lot.qty
-    portfolio[lot.symbol].value += lot.value
-    portfolio[lot.symbol].gain += lot.total_gain
+    for lot in port.lots:
+        print(f"Symbol: {lot.symbol}, Date: {lot.date}, Qty: {lot.qty}, Price Paid: {lot.price_paid}, "
+              f"Days Gain: {lot.days_gain}, Total Gain: {lot.total_gain}, Total Gain %: {lot.total_gain_percent}, "
+              f"Value: {lot.value}, CAGR: {lot.cagr:.2%}")
+        if lot.symbol not in port.portfolio:
+            port.portfolio[lot.symbol] = StockInfo(lot.symbol)
 
-print(f"\nWeighted Average CAGR: {weighted_average_cagr:.2%}")
+        port.portfolio[lot.symbol].qty += lot.qty
+        port.portfolio[lot.symbol].value += lot.value
+        port.portfolio[lot.symbol].gain += lot.total_gain
 
-total_value = 0.0
-total_gain = 0.0
-for sym, stock in portfolio.items():
-    total_value += stock.value
-    total_gain += stock.gain
-    print(f'Symbol:{sym} Value:{stock.value:.2f} gain:{stock.gain:.2f}')
+    for sym, stock in port.portfolio.items():
+        total_value += stock.value
+        total_gain += stock.gain
+        print(f'Symbol:{sym} Value:{stock.value:.2f} gain:{stock.gain:.2f}')
 
-print(f'Total value: {total_value:.2f} total_gain:{total_gain:.2f}')
+    port.plot_timeline()
 
+    print(f'Total value: {total_value:.2f} total_gain:{total_gain:.2f}')
