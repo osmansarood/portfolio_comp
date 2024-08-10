@@ -7,9 +7,11 @@ import matplotlib.pyplot as plt
 
 # Usage example:
 PATHS = [
-    # '/Users/osman/Downloads/PortfolioDownload_ssr_aug3.csv',
     '/Users/osman/Downloads/PortfolioDownload_os.csv',  # Replace with your actual file path
+    '/Users/osman/Downloads/PortfolioDownload_ssr_aug3.csv',
 ]
+
+SPECIAL_STOCKS = ['AAPL']
 
 
 class StockInfo:
@@ -27,15 +29,22 @@ class Portfolio:
 
     def plot_timeline(self):
         dates = []
+        dates_special = []
         values = []
+        values_special = []
         for l in self.lots:
-            dates.append(datetime.strptime(l.date, '%m/%d/%Y'))
-            values.append(l.value)
+            if l.symbol in SPECIAL_STOCKS:
+                dates_special.append(datetime.strptime(l.date, '%m/%d/%Y'))
+                values_special.append(l.qty * l.price_paid)
+            else:
+                dates.append(datetime.strptime(l.date, '%m/%d/%Y'))
+                values.append(l.qty * l.price_paid)
 
         print(dates)
         print(values)
         # Create a plot
         plt.scatter(dates, values)
+        plt.scatter(dates_special, values_special, color='red')
 
         # Add labels and title
         plt.xlabel('Date')
@@ -102,7 +111,9 @@ class LotInfo:
 
 def is_date(string):
     try:
-        parse(string)
+        string = string.strip().rstrip()
+        # Define the expected date format as DD/MM/YYYY
+        datetime.strptime(string, '%m/%d/%Y')
         return True
     except ValueError:
         return False
