@@ -7,6 +7,9 @@ import matplotlib.pyplot as plt
 import json
 
 
+SPECIAL_STOCKS = ['AAPL']
+
+
 def determine_header_map(header):
     map = {
         'Date': 0
@@ -108,7 +111,7 @@ class Portfolio:
             return 0.0
         return weighted_cagr_sum / total_weight
 
-    def parse_csv(self, file_path):
+    def parse_csv(self, file_path, fetch_AAPL_price=True):
         lots = []
         print(f'Reading file:{file_path}')
         current_symbol = None
@@ -124,7 +127,7 @@ class Portfolio:
                         price_paid = float(row[map['Price Paid']].strip())
                         value = float(row[map['Value']].strip())
                         total_gain = float(row[map['Total Gain']].strip())
-                        if current_symbol == 'AAPL':
+                        if fetch_AAPL_price and current_symbol == 'AAPL':
                             price_paid = self.get_stock_price(current_symbol, convert_date_format(date))
                             total_gain = value - (price_paid * qty)
                         days_gain = float(row[map['Day Gain']].strip())
@@ -173,32 +176,7 @@ class Portfolio:
         for sym, data in self.ticker_cache.items():
             with open(f'ticker_data/{sym}.json', 'w') as fd:
                 json.dump(data, fd, indent=4)
-
-    def get_stock_price(self, symbol, date, itr=5, end_date=None):
-        if not itr:
-            return None
-        if symbol not in self.ticker_cache:
-            self.cache_ticker_data(symbol)
-        if symbol in self.ticker_cache and date in self.ticker_cache[symbol]:
-            return self.ticker_cache[symbol][date]
-
-        if symbol not in self.stocks:
-            self.stocks[symbol] = yf.Ticker(symbol)
-        stock = self.stocks[symbol]
-        if end_date:
-            end_d = convert_date_format(end_date)
-        else:
-            end_d = add_one_day(date)
-
-        hist = stock.history(start=date, end=end_d)
-        if not hist.empty:
-            print(f'Price fetch {symbol} {date} {add_one_day(date)} {hist["Close"]}')
-            if symbol not in self.ticker_cache:
-                self.ticker_cache[symbol] = {}
-            self.ticker_cache[symbol][date] = hist['Close'].iloc[0]
-            return hist['Close'].iloc[0]
-        else:
-            return self.get_stock_price(symbol, add_one_day(date), itr - 1)
+                print(f'Wrote data to {sym}.json')
 
     def plot_timeline(self):
         total_cost = 0
@@ -231,6 +209,39 @@ class Portfolio:
 
         # Show the plot
         plt.show()
+
+    def get_stock_price(self, symbol, date, itr=5, end_date=None):
+        if not itr:
+            return None
+
+        if symbol not in self.ticker_cache:
+            self.cache_ticker_data(symbol)
+
+        if symbol not in self.stocks:
+            self.stocks[symbol] = yf.Ticker(symbol)
+        stock = self.stocks[symbol]
+        if end_date:
+            end_d = convert_date_format(end_date)
+        else:
+            end_d = add_one_day(date)
+
+        hist = stock.history(start=date, end=end_d)
+
+        if not hist.empty:
+            print(f'Price fetch {symbol} {date} {add_one_day(date)} {hist["Close"]}')
+            if symbol not in self.ticker_cache:
+                self.ticker_cache[symbol] = {}
+            if not end_d:
+                self.ticker_cache[symbol][date] = hist['Close'].iloc[0]
+                return hist['Close'].iloc[0]
+            else:
+                for i in range(len(hist)):
+                    ts = str(hist.index[i])
+                    ts = ts.split()[0]
+                    self.ticker_cache[symbol][ts] = hist['Close'].iloc[i]
+                    # print('kkk ', hist['Date'].iloc[i], hist['Close'].iloc[i])
+        else:
+            return self.get_stock_price(symbol, add_one_day(date), itr - 1)
 
     def add_lots(self, l):
         self.lots += l

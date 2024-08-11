@@ -13,8 +13,6 @@ PATHS = [
     '/Users/osman/Downloads/PortfolioDownload_ssr_aug3.csv',
 ]
 
-SPECIAL_STOCKS = ['AAPL']
-
 port = Portfolio()
 
 if __name__ == '__main__':
