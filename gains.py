@@ -4,6 +4,7 @@ from dateutil.parser import parse
 import yfinance as yf
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
+import json
 
 # Usage example:
 PATHS = [
@@ -26,13 +27,47 @@ class Portfolio:
     def __init__(self):
         self.portfolio = {}
         self.lots = []
+        self.ticker_cache = {}
+        self.stocks = {}
+
+    def cache_ticker_data(self, symbol):
+        with open(f'ticker_data/{symbol}.json', 'r') as fd:
+            self.ticker_cache[symbol] = json.load(fd)
+
+    def write_ticker_cache(self):
+        for sym, data in self.ticker_cache.items():
+            with open(f'ticker_data/{sym}.json', 'w') as fd:
+                json.dump(data, fd, indent=4)
+
+    def get_stock_price(self, symbol, date, itr=5):
+        if not itr:
+            return None
+        if symbol not in self.ticker_cache:
+            self.cache_ticker_data(symbol)
+        if symbol in self.ticker_cache and date in self.ticker_cache[symbol]:
+            return self.ticker_cache[symbol][date]
+
+        if symbol not in self.stocks:
+            self.stocks[symbol] = yf.Ticker(symbol)
+        stock = self.stocks[symbol]
+        hist = stock.history(start=date, end=add_one_day(date))
+        if not hist.empty:
+            print(f'Price fetch {symbol} {date} {add_one_day(date)} {hist["Close"].iloc[0]}')
+            if symbol not in self.ticker_cache:
+                self.ticker_cache[symbol] = {}
+            self.ticker_cache[symbol][date] = hist['Close'].iloc[0]
+            return hist['Close'].iloc[0]
+        else:
+            return self.get_stock_price(symbol, add_one_day(date), itr - 1)
 
     def plot_timeline(self):
+        total_cost = 0
         dates = []
         dates_special = []
         values = []
         values_special = []
         for l in self.lots:
+            total_cost += l.qty * l.price_paid
             if l.symbol in SPECIAL_STOCKS:
                 dates_special.append(datetime.strptime(l.date, '%m/%d/%Y'))
                 values_special.append(l.qty * l.price_paid)
@@ -40,8 +75,8 @@ class Portfolio:
                 dates.append(datetime.strptime(l.date, '%m/%d/%Y'))
                 values.append(l.qty * l.price_paid)
 
-        print(dates)
-        print(values)
+        print(f'Total cost basis: {total_cost:.2f}')
+
         # Create a plot
         plt.scatter(dates, values)
         plt.scatter(dates_special, values_special, color='red')
@@ -80,20 +115,6 @@ def add_one_day(date_str):
     # Convert the datetime object back to a string
     next_day_str = next_day.strftime('%Y-%m-%d')
     return next_day_str
-
-
-def get_stock_price(symbol, date, itr=5):
-    if not itr:
-        return None
-    if symbol not in stocks:
-        stocks[symbol] = yf.Ticker(symbol)
-    stock = stocks[symbol]
-    hist = stock.history(start=date, end=add_one_day(date))
-    if not hist.empty:
-        print(f'Price fetch {symbol} {date} {add_one_day(date)} {hist["Close"].iloc[0]}')
-        return hist['Close'].iloc[0]
-    else:
-        return get_stock_price(symbol, add_one_day(date), itr - 1)
 
 
 @dataclass
@@ -171,7 +192,7 @@ def parse_csv(file_path):
                     value = float(row[map['Value']].strip())
                     total_gain = float(row[map['Total Gain']].strip())
                     if current_symbol == 'AAPL':
-                        price_paid = get_stock_price(current_symbol, convert_date_format(date))
+                        price_paid = port.get_stock_price(current_symbol, convert_date_format(date))
                         total_gain = value - (price_paid * qty)
                     days_gain = float(row[map['Day Gain']].strip())
 
@@ -212,8 +233,6 @@ def calculate_weighted_average_cagr(lots):
 
 if __name__ == '__main__':
 
-    stocks = {}
-
     total_value = 0.0
     total_gain = 0.0
 
@@ -239,6 +258,7 @@ if __name__ == '__main__':
         total_gain += stock.gain
         print(f'Symbol:{sym} Value:{stock.value:.2f} gain:{stock.gain:.2f}')
 
+    port.write_ticker_cache()
     port.plot_timeline()
 
     print(f'Total value: {total_value:.2f} total_gain:{total_gain:.2f}')
