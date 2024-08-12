@@ -20,6 +20,7 @@ if __name__ == '__main__':
     total_value = 0.0
     total_gain = 0.0
 
+
     for file_path in PATHS:
         port.add_lots(port.parse_csv(file_path))
         weighted_average_cagr = port.calculate_weighted_average_cagr()

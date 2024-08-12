@@ -3,8 +3,11 @@ from portfolio import StockInfo, LotInfo, Portfolio, convert_date_format
 
 # Usage example:
 PATHS = [
-    '/Users/osman/Downloads/PortfolioDownload_os.csv',  # Replace with your actual file path
-    '/Users/osman/Downloads/PortfolioDownload_ssr_aug3.csv',
+    # '/Users/osman/Downloads/PortfolioDownload_os.csv',  # Replace with your actual file path
+    # '/Users/osman/Downloads/PortfolioDownload_ssr_aug3.csv',
+
+    # '/Users/osman/Downloads/PortfolioDownload_os_aug12.csv',  # Replace with your actual file path
+    '/Users/osman/Downloads/PortfolioDownload_ssr_aug12.csv',
 ]
 
 port = Portfolio()
@@ -18,6 +21,7 @@ if __name__ == '__main__':
         # print(f'{l.symbol} {l.date}')
         symbols.add(l.symbol)
 
+    symbols = ['VTI']
     for sym in symbols:
         try:
             print(f'Fetching {sym}')

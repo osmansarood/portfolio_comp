@@ -30,8 +30,6 @@ def determine_header_map(header):
     return map
 
 
-
-
 def calculate_cagr(start_value, end_value, years):
     if years == 0:
         return 0.0
@@ -153,17 +151,51 @@ class Portfolio:
                     current_symbol = row[0].strip()
         return lots
 
-    def generate_worm(self):
-        all_dates = [l.date for l in self.lots]
+    def generate_worm(self, index=None):
+        all_dates = set([l.date for l in self.lots] + ['08/09/2024'])
+        # all_dates = set([l.date for l in self.lots])
+        date_objects = [datetime.strptime(date, "%m/%d/%Y") for date in all_dates]
+        date_objects.sort()
+        all_dates = date_objects
+        # all_dates = [date.strftime("%m/%d/%Y") for date in date_objects]
+        values = []
+        dates = []
         for date in all_dates:
             value = 0
             for l in self.lots:
-                # print(f'{l.symbol} {l.date} {l.qty} {l.price_paid}')
-                if datetime.strptime(date, '%m/%d/%Y') >= datetime.strptime(l.date, '%m/%d/%Y'):
-                    cur_price = self.get_stock_price(l.symbol, convert_date_format(date), end_date='08/10/2024')
-                    value += cur_price * l.qty
+                # if datetime.strptime(date, '%m/%d/%Y') >= datetime.strptime(l.date, '%m/%d/%Y'):
+                if date >= datetime.strptime(l.date, '%m/%d/%Y'):
+                    cur_price = self.get_stock_price(l.symbol, convert_date_format(date.strftime("%m/%d/%Y")),
+                                                     cached=True)
+                    cur_val = cur_price * l.qty
+                    if index:
+                        index_buy_price = self.get_stock_price(index, convert_date_format(l.date), cached=True)
+                        index_cur_price = self.get_stock_price(index, convert_date_format(date.strftime("%m/%d/%Y")), cached=True)
+                        cur_val = (l.price_paid * l.qty) / index_buy_price * index_cur_price
 
-            print('-----> ', date, value)
+                        print('\ncoming 00000 ', date, l.date, index_buy_price, index_cur_price, l.value, cur_val)
+
+                    # cur_val = l.price_paid * l.qty
+                    # cur_price = self.get_stock_price('VGT', convert_date_format(date.strftime("%m/%d/%Y")), end_date='08/10/2024', cached=True)
+                    value += cur_val
+
+            print(f'Portfolio value {date} as of {value}')
+            dates.append(date)
+            values.append(value)
+
+        plt.plot(dates, values)
+
+        # Add labels and title
+        plt.xlabel('Date')
+        plt.ylabel('Value')
+        plt.title('Values Over Time')
+
+        # Format the x-axis to show dates clearly
+        plt.gcf().autofmt_xdate()  # Auto-format the date labels
+
+        # Show the plot
+        plt.show()
+            # print('-----> ', date, value)
 
     def cache_ticker_data(self, symbol):
         try:
@@ -210,12 +242,21 @@ class Portfolio:
         # Show the plot
         plt.show()
 
-    def get_stock_price(self, symbol, date, itr=5, end_date=None):
+    def get_stock_price(self, symbol, date, itr=5, end_date=None, cached=False):
+        if cached:
+            return self.get_stock_price_cached(symbol, date, itr, end_date)
+        else:
+            return self.get_stock_price_live(symbol, date, itr, end_date)
+
+    def get_stock_price_cached(self, symbol, date, itr=5, end_date=None):
+        # print('----> ', symbol, date)
+        if date not in self.ticker_cache[symbol]:
+            return self.get_stock_price_cached(symbol, add_one_day(date), itr - 1)
+        return self.ticker_cache[symbol][date]
+
+    def get_stock_price_live(self, symbol, date, itr=5, end_date=None):
         if not itr:
             return None
-
-        if symbol not in self.ticker_cache:
-            self.cache_ticker_data(symbol)
 
         if symbol not in self.stocks:
             self.stocks[symbol] = yf.Ticker(symbol)
