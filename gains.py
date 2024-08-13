@@ -1,4 +1,6 @@
 import csv
+import sys
+
 from dataclasses import dataclass
 from dateutil.parser import parse
 import yfinance as yf
@@ -10,7 +12,12 @@ from portfolio import StockInfo, LotInfo, Portfolio, convert_date_format
 # Usage example:
 PATHS = [
     # '/Users/osman/Downloads/PortfolioDownload_os.csv',  # Replace with your actual file path
-    '/Users/osman/Downloads/PortfolioDownload_ssr_aug3.csv',
+    # '/Users/osman/Downloads/PortfolioDownload_ssr_aug3.csv',
+
+    # '/Users/osman/Downloads/PortfolioDownload_os_aug12.csv',  # Replace with your actual file path
+    # '/Users/osman/Downloads/PortfolioDownload_ssr_aug12.csv',
+    # '/Users/osman/Downloads/Sellable_ssr_aug13.csv',
+    '/Users/osman/Downloads/chase_os_aug13.csv'
 ]
 
 port = Portfolio()
@@ -23,6 +30,9 @@ if __name__ == '__main__':
 
     for file_path in PATHS:
         port.add_lots(port.parse_csv(file_path))
+        # port.add_lots(port.parse_grant_csv(file_path))
+        # print('llll ', port.lots)
+        # sys.exit(1)
         weighted_average_cagr = port.calculate_weighted_average_cagr()
 
     print(f"\nWeighted Average CAGR: {weighted_average_cagr:.2%}")

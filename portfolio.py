@@ -5,6 +5,7 @@ import yfinance as yf
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 import json
+import pandas as pd
 
 
 SPECIAL_STOCKS = ['AAPL']
@@ -15,13 +16,14 @@ def determine_header_map(header):
         'Date': 0
     }
     expected_map = {
-        'Symbol': ['Symbol', 'Date'],
-        'Quantity': ['Quantity', 'Qty #'],
-        'Price Paid': ['Price Paid $'],
+        'Symbol': ['Symbol', 'Date', 'Ticker'],
+        'Quantity': ['Quantity', 'Qty #', 'Sellable Qty.'],
+        'Price Paid': ['Price Paid $', 'Unit Cost'],
         'Day Gain': ['Day\'s Gain $'],
-        'Total Gain': ['Total Gain $'],
-        'Total Gain %': ['Total Gain %'],
-        'Value': ['Value $'],
+        'Date': ['Date Acquired', 'Acquisition Date'],
+        'Total Gain': ['Total Gain $', 'Expected Gain/Loss', 'Unrealized G/L Amt.'],
+        'Total Gain %': ['Total Gain %', 'Unrealized Gain/Loss (%)'],
+        'Value': ['Value $', 'Est. Market Value', 'Value'],
     }
     for id, col in enumerate(header):
         col_name = find_index(expected_map, col)
@@ -52,11 +54,11 @@ def find_index(expected_map, col):
             return k
     return None
 
-def convert_date_format(date_str):
+def convert_date_format(date_str, input_format='%m/%d/%Y', output_format='%Y-%m-%d'):
     # Convert the string to a datetime object with the given format
-    date_obj = datetime.strptime(date_str, '%m/%d/%Y')
+    date_obj = datetime.strptime(date_str, input_format)
     # Convert the datetime object to a string in the new format
-    new_date_str = date_obj.strftime('%Y-%m-%d')
+    new_date_str = date_obj.strftime(output_format)
     return new_date_str
 
 def add_one_day(date_str):
@@ -109,7 +111,58 @@ class Portfolio:
             return 0.0
         return weighted_cagr_sum / total_weight
 
+    def parse_grant_csv(self, file_path):
+        lots = []
+        print(f'Reading file:{file_path}')
+        with open(file_path, 'r') as file:
+            reader = csv.reader(file)
+            header = next(reader)  # Skip the header row
+            map = determine_header_map(header)
+            for row in reader:
+                # date should in in format 08/09/2024
+                date = convert_date_format(row[map['Date']].strip(), '%d-%b-%Y', '%m/%d/%Y')
+
+                print('---> ', date)
+                qty = float(row[map['Quantity']].strip())
+                price_paid = None
+                if 'Price Paid' in map:
+                    price_paid = float(row[map['Price Paid']].strip())
+                cleaned_value_str = row[map['Value']].strip().replace('$', '').replace(',', '')
+                value = float(cleaned_value_str)
+                cleaned_gain_str = row[map['Total Gain']].strip().replace('$', '').replace(',', '')
+                total_gain = float(cleaned_gain_str)
+
+
+                price_paid = self.get_stock_price('AAPL', convert_date_format(date, input_format='%m/%d/%Y'), cached=True)
+                total_gain = value - (price_paid * qty)
+                days_gain = None
+                # not all files have days gain
+                if 'Day Gain' in map:
+                    days_gain = float(row[map['Day Gain']].strip())
+
+                total_gain_percent = None
+                if 'Total Gain %' in map:
+                    total_gain_percent = float(row[map['Total Gain %']].strip())
+
+                # Calculate number of years from acquisition date to today
+                acquisition_date = parse(date)
+                current_date = datetime.now()
+                years_held = (current_date - acquisition_date).days / 365.25
+
+                # Calculate CAGR
+                start_value = qty * price_paid
+                end_value = value
+                cagr = calculate_cagr(start_value, end_value, years_held)
+
+                lot = LotInfo('AAPL', date, qty, price_paid, days_gain, total_gain, total_gain_percent,
+                              value, cagr)
+                lots.append(lot)
+                # print(lot)
+        return lots
+
     def parse_csv(self, file_path, fetch_AAPL_price=True):
+        if 'Sellable' in file_path:
+            return self.parse_grant_csv(file_path, )
         lots = []
         print(f'Reading file:{file_path}')
         current_symbol = None
@@ -118,9 +171,11 @@ class Portfolio:
             header = next(reader)  # Skip the header row
             map = determine_header_map(header)
             for row in reader:
-                if is_date(row[0]):
-                    try:
+                # print('ddddd ', row[map['Date']].strip())
+                if is_date(row[0]) or is_date(row[map['Date']].strip()):
+                    # try:
                         date = row[map['Date']].strip()
+                        print('nnnnn ', map['Date'], date,  row[map['Date']].strip())
                         qty = float(row[map['Quantity']].strip())
                         price_paid = float(row[map['Price Paid']].strip())
                         value = float(row[map['Value']].strip())
@@ -128,7 +183,10 @@ class Portfolio:
                         if fetch_AAPL_price and current_symbol == 'AAPL':
                             price_paid = self.get_stock_price(current_symbol, convert_date_format(date), cached=True)
                             total_gain = value - (price_paid * qty)
-                        days_gain = float(row[map['Day Gain']].strip())
+                        days_gain = None
+                        # not all files have days gain
+                        if 'Day Gain' in map:
+                            days_gain = float(row[map['Day Gain']].strip())
 
                         total_gain_percent = float(row[map['Total Gain %']].strip())
 
@@ -140,26 +198,39 @@ class Portfolio:
                         # Calculate CAGR
                         start_value = qty * price_paid
                         end_value = value
+
                         cagr = calculate_cagr(start_value, end_value, years_held)
+
 
                         lot = LotInfo(current_symbol, date, qty, price_paid, days_gain, total_gain, total_gain_percent,
                                       value, cagr)
                         lots.append(lot)
-                    except ValueError as e:
-                        print(f"Error parsing row: {row} - {e}")
+                    # except ValueError as e:
+                    #     print(f"Error parsing row: {row} - {e}")
                 else:
                     current_symbol = row[0].strip()
         return lots
 
-    def generate_worm(self, index=[]):
-        self.generate_worm_single()
+    def generate_worm(self, index=[], start_date=None):
+        self.generate_worm_single(start_date=start_date)
         for ind in index:
             print('=====iiii ', ind)
-            self.generate_worm_single(index=ind)
+            self.generate_worm_single(index=ind, start_date=start_date)
         plt.show()
 
-    def generate_worm_single(self, index=None):
+    def generate_worm_single(self, index=None, start_date=None):
         all_dates = set([l.date for l in self.lots] + ['08/09/2024'])
+        starting_date = '01/01/2019'
+        end_date = '08/09/2024'
+
+        # Generate the range of weekdays and format them as 'MM/DD/YYYY'
+        weekdays = pd.bdate_range(start=start_date, end=pd.to_datetime(end_date, format='%m/%d/%Y'))
+
+        # Filter only Wednesdays (where Wednesday is day number 2 in pandas, starting from Monday=0)
+        wednesdays = weekdays[weekdays.weekday == 2].strftime('%m/%d/%Y').tolist()
+
+        all_dates = wednesdays
+
         # all_dates = set([l.date for l in self.lots])
         date_objects = [datetime.strptime(date, "%m/%d/%Y") for date in all_dates]
         date_objects.sort()
@@ -169,11 +240,17 @@ class Portfolio:
         dates = []
 
         for date in all_dates:
+
+            if start_date and date < datetime.strptime(start_date, '%m/%d/%Y'):
+                continue
             value = 0
             aapl_val = 0.0
             for l in self.lots:
+                if l.symbol in []:
+                    continue
                 # if datetime.strptime(date, '%m/%d/%Y') >= datetime.strptime(l.date, '%m/%d/%Y'):
                 if date >= datetime.strptime(l.date, '%m/%d/%Y'):
+                    print(l)
                     cur_price = self.get_stock_price(l.symbol, convert_date_format(date.strftime("%m/%d/%Y")),
                                                      cached=True)
                     cur_val = cur_price * l.qty
@@ -182,7 +259,7 @@ class Portfolio:
                         index_cur_price = self.get_stock_price(index, convert_date_format(date.strftime("%m/%d/%Y")), cached=True)
                         cur_val = (l.price_paid * l.qty) / index_buy_price * index_cur_price
 
-                        print('\ncoming 00000 ', date, l.date, index_buy_price, index_cur_price, l.value, cur_val)
+                        # print('\ncoming 00000 ', date, l.date, index_buy_price, index_cur_price, l.value, cur_val)
 
                     # cur_val = l.price_paid * l.qty
                     if l.symbol == 'AAPL':
@@ -194,7 +271,13 @@ class Portfolio:
             dates.append(date)
             values.append(value)
 
-        plt.plot(dates, values)
+        label = index
+        if not index:
+            label = 'Shehla/Osman'
+
+        plt.plot(dates, values, label=label)
+        plt.legend()
+
 
         # Add labels and title
         plt.xlabel('Date')
@@ -262,7 +345,7 @@ class Portfolio:
             return self.get_stock_price_live(symbol, date, itr, end_date)
 
     def get_stock_price_cached(self, symbol, date, itr=5, end_date=None):
-        # print('----> ', symbol, date)
+        print('----> ', symbol, date)
         if date not in self.ticker_cache[symbol]:
             return self.get_stock_price_cached(symbol, add_one_day(date), itr - 1)
         return self.ticker_cache[symbol][date]
