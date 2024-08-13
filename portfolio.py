@@ -126,7 +126,7 @@ class Portfolio:
                         value = float(row[map['Value']].strip())
                         total_gain = float(row[map['Total Gain']].strip())
                         if fetch_AAPL_price and current_symbol == 'AAPL':
-                            price_paid = self.get_stock_price(current_symbol, convert_date_format(date))
+                            price_paid = self.get_stock_price(current_symbol, convert_date_format(date), cached=True)
                             total_gain = value - (price_paid * qty)
                         days_gain = float(row[map['Day Gain']].strip())
 
@@ -151,7 +151,14 @@ class Portfolio:
                     current_symbol = row[0].strip()
         return lots
 
-    def generate_worm(self, index=None):
+    def generate_worm(self, index=[]):
+        self.generate_worm_single()
+        for ind in index:
+            print('=====iiii ', ind)
+            self.generate_worm_single(index=ind)
+        plt.show()
+
+    def generate_worm_single(self, index=None):
         all_dates = set([l.date for l in self.lots] + ['08/09/2024'])
         # all_dates = set([l.date for l in self.lots])
         date_objects = [datetime.strptime(date, "%m/%d/%Y") for date in all_dates]
@@ -160,8 +167,10 @@ class Portfolio:
         # all_dates = [date.strftime("%m/%d/%Y") for date in date_objects]
         values = []
         dates = []
+
         for date in all_dates:
             value = 0
+            aapl_val = 0.0
             for l in self.lots:
                 # if datetime.strptime(date, '%m/%d/%Y') >= datetime.strptime(l.date, '%m/%d/%Y'):
                 if date >= datetime.strptime(l.date, '%m/%d/%Y'):
@@ -176,10 +185,12 @@ class Portfolio:
                         print('\ncoming 00000 ', date, l.date, index_buy_price, index_cur_price, l.value, cur_val)
 
                     # cur_val = l.price_paid * l.qty
+                    if l.symbol == 'AAPL':
+                        aapl_val += l.price_paid * l.qty
                     # cur_price = self.get_stock_price('VGT', convert_date_format(date.strftime("%m/%d/%Y")), end_date='08/10/2024', cached=True)
                     value += cur_val
 
-            print(f'Portfolio value {date} as of {value}')
+            print(f'Portfolio value {date} as of {value} aapl:{aapl_val}')
             dates.append(date)
             values.append(value)
 
@@ -194,7 +205,7 @@ class Portfolio:
         plt.gcf().autofmt_xdate()  # Auto-format the date labels
 
         # Show the plot
-        plt.show()
+        # plt.show()
             # print('-----> ', date, value)
 
     def cache_ticker_data(self, symbol):
@@ -244,6 +255,8 @@ class Portfolio:
 
     def get_stock_price(self, symbol, date, itr=5, end_date=None, cached=False):
         if cached:
+            if symbol not in self.ticker_cache:
+                self.cache_ticker_data(symbol)
             return self.get_stock_price_cached(symbol, date, itr, end_date)
         else:
             return self.get_stock_price_live(symbol, date, itr, end_date)

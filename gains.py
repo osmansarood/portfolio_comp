@@ -9,7 +9,7 @@ from portfolio import StockInfo, LotInfo, Portfolio, convert_date_format
 
 # Usage example:
 PATHS = [
-    '/Users/osman/Downloads/PortfolioDownload_os.csv',  # Replace with your actual file path
+    # '/Users/osman/Downloads/PortfolioDownload_os.csv',  # Replace with your actual file path
     '/Users/osman/Downloads/PortfolioDownload_ssr_aug3.csv',
 ]
 
@@ -38,13 +38,14 @@ if __name__ == '__main__':
         port.portfolio[lot.symbol].value += lot.value
         port.portfolio[lot.symbol].gain += lot.total_gain
 
+    total_cost = 0
     for sym, stock in port.portfolio.items():
         total_value += stock.value
         total_gain += stock.gain
-        print(f'Symbol:{sym} Value:{stock.value:.2f} gain:{stock.gain:.2f}')
+        total_cost += stock.value - stock.gain
+        print(f'Symbol:{sym} Value:{stock.value:.2f} gain:{stock.gain:.2f} cost:{stock.value-stock.gain:.2f}')
 
-    port.write_ticker_cache()
-    port.generate_worm()
+    print(f'Total value: {total_value:.2f} total_gain:{total_gain:.2f} cost:{total_cost:.2f}')
+    # port.write_ticker_cache()
+    # port.generate_worm()
     # port.plot_timeline()
-
-    print(f'Total value: {total_value:.2f} total_gain:{total_gain:.2f}')
