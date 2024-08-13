@@ -21,7 +21,7 @@ if __name__ == '__main__':
         # print(f'{l.symbol} {l.date}')
         symbols.add(l.symbol)
 
-    symbols = ['VTI']
+    symbols = ['QQQ', 'ITOT', 'SOXX', 'VOOG']
     for sym in symbols:
         try:
             print(f'Fetching {sym}')
