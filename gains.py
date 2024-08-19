@@ -54,7 +54,9 @@ if __name__ == '__main__':
         port.portfolio[lot.symbol].gain += lot.total_gain
 
     total_cost = 0
-    for sym, stock in port.portfolio.items():
+    sorted_stocks = sorted(port.portfolio.items(), key=lambda item: item[1].value, reverse=True)
+
+    for sym, stock in sorted_stocks:
         total_value += stock.value
         total_gain += stock.gain
         total_cost += stock.value - stock.gain
