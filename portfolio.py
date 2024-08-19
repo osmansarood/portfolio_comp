@@ -190,7 +190,7 @@ class Portfolio:
                 if is_date(row[0]) or is_date(row[map['Date']].strip()):
                     # try:
                         date = row[map['Date']].strip()
-                        print('nnnnn ', map['Date'], date,  row[map['Date']].strip())
+
                         qty = float(row[map['Quantity']].strip())
                         price_paid = float(row[map['Price Paid']].strip())
                         value = float(row[map['Value']].strip())
@@ -234,17 +234,18 @@ class Portfolio:
         plt.show()
 
     def generate_worm_single(self, index=None, start_date=None):
-        all_dates = set([l.date for l in self.lots] + ['08/09/2024'])
+        end_date = '08/15/2024'
+        all_dates = set([l.date for l in self.lots] + [end_date])
         starting_date = '01/01/2019'
-        end_date = '08/09/2024'
 
         # Generate the range of weekdays and format them as 'MM/DD/YYYY'
         weekdays = pd.bdate_range(start=start_date, end=pd.to_datetime(end_date, format='%m/%d/%Y'))
 
         # Filter only Wednesdays (where Wednesday is day number 2 in pandas, starting from Monday=0)
-        wednesdays = weekdays[weekdays.weekday == 2].strftime('%m/%d/%Y').tolist()
+        # wednesdays = weekdays[weekdays.weekday == 2].strftime('%m/%d/%Y').tolist()
 
-        all_dates = wednesdays
+        # all_dates = wednesdays
+        all_dates = weekdays.strftime('%m/%d/%Y').tolist()
 
         # all_dates = set([l.date for l in self.lots])
         date_objects = [datetime.strptime(date, "%m/%d/%Y") for date in all_dates]
@@ -265,7 +266,6 @@ class Portfolio:
                     continue
                 # if datetime.strptime(date, '%m/%d/%Y') >= datetime.strptime(l.date, '%m/%d/%Y'):
                 if date >= datetime.strptime(l.date, '%m/%d/%Y'):
-                    print(l)
                     cur_price = self.get_stock_price(l.symbol, convert_date_format(date.strftime("%m/%d/%Y")),
                                                      cached=True)
                     cur_val = cur_price * l.qty
@@ -360,7 +360,6 @@ class Portfolio:
             return self.get_stock_price_live(symbol, date, itr, end_date)
 
     def get_stock_price_cached(self, symbol, date, itr=5, end_date=None):
-        print('----> ', symbol, date)
         if date not in self.ticker_cache[symbol]:
             return self.get_stock_price_cached(symbol, add_one_day(date), itr - 1)
         return self.ticker_cache[symbol][date]

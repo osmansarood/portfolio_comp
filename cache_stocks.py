@@ -7,7 +7,12 @@ PATHS = [
     # '/Users/osman/Downloads/PortfolioDownload_ssr_aug3.csv',
 
     # '/Users/osman/Downloads/PortfolioDownload_os_aug12.csv',  # Replace with your actual file path
-    '/Users/osman/Downloads/PortfolioDownload_ssr_aug12.csv',
+    # '/Users/osman/Downloads/PortfolioDownload_ssr_aug12.csv',
+
+    '/Users/osman/Downloads/PortfolioDownload_os_aug15.csv',  # Replace with your actual file path
+    '/Users/osman/Downloads/PortfolioDownload_ssr_aug15.csv',
+    '/Users/osman/Downloads/Sellable_ssr_aug15.csv',
+    '/Users/osman/Downloads/chase_os_aug15.csv',
 ]
 
 port = Portfolio()
@@ -21,11 +26,12 @@ if __name__ == '__main__':
         # print(f'{l.symbol} {l.date}')
         symbols.add(l.symbol)
 
-    symbols = ['QQQ', 'ITOT', 'SOXX', 'VOOG']
+    # symbols = ['QQQ', 'ITOT', 'SOXX', 'VOOG']
+    symbols = ['ZM']
     for sym in symbols:
         try:
             print(f'Fetching {sym}')
-            print(port.get_stock_price(sym, '2015-08-11', itr=5, end_date='08/11/2024'))
+            print(port.get_stock_price(sym, '2015-08-11', itr=5, end_date='09/16/2028'))
         except Exception as e:
             print(f'Error for {sym} {e}')
         # break
