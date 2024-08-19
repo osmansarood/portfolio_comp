@@ -56,12 +56,19 @@ if __name__ == '__main__':
     total_cost = 0
     sorted_stocks = sorted(port.portfolio.items(), key=lambda item: item[1].value, reverse=True)
 
+    total_value = 0
     for sym, stock in sorted_stocks:
         total_value += stock.value
+
+    total_perc_port = 0.0
+    for sym, stock in sorted_stocks:
         total_gain += stock.gain
         total_cost += stock.value - stock.gain
-        print(f'Symbol:{sym} Value:{stock.value:.2f} gain:{stock.gain:.2f} cost:{stock.value-stock.gain:.2f}')
+        perc_port = stock.value / total_value * 100
+        total_perc_port += perc_port
+        print(f'Symbol:{sym} Value:{stock.value:.2f} gain:{stock.gain:.2f} cost:{stock.value-stock.gain:.2f} % portfolio:{perc_port:.2f}')
 
+    print(f'sum perc portfolio:{total_perc_port:.2f}')
     print(f'Total value: {total_value:.2f} total_gain:{total_gain:.2f} cost:{total_cost:.2f}')
     # port.write_ticker_cache()
     # port.generate_worm()
