@@ -9,6 +9,7 @@ import pandas as pd
 
 
 SPECIAL_STOCKS = ['AAPL']
+YEARS_CUTOFF = 0.5
 
 def is_valid_date_format(date_str, format_str='%m/%d/%Y'):
     try:
@@ -113,7 +114,8 @@ class Portfolio:
         for lot in lots:
             weight = lot.price_paid * lot.qty
             total_weight += weight
-            weighted_cagr_sum += lot.cagr * weight
+            if lot.cagr:
+                weighted_cagr_sum += lot.cagr * weight
 
         if total_weight == 0:
             return 0.0
@@ -127,6 +129,9 @@ class Portfolio:
             header = next(reader)  # Skip the header row
             map = determine_header_map(header)
             for row in reader:
+                if row and row[0].startswith('Overall Total'):
+                    # file ended
+                    break
                 if row[map['Symbol']].strip() == 'QAJDS':
                     # this represents cash in chase. pass on..
                     continue
@@ -147,7 +152,6 @@ class Portfolio:
                 cleaned_gain_str = row[map['Total Gain']].strip().replace('$', '').replace(',', '')
                 total_gain = float(cleaned_gain_str)
 
-
                 price_paid = self.get_stock_price(symbol, convert_date_format(date, input_format='%m/%d/%Y'), cached=True)
                 total_gain = value - (price_paid * qty)
                 days_gain = None
@@ -163,6 +167,9 @@ class Portfolio:
                 acquisition_date = parse(date)
                 current_date = datetime.now()
                 years_held = (current_date - acquisition_date).days / 365.25
+
+                if years_held < YEARS_CUTOFF:
+                    cagr = None
 
                 # Calculate CAGR
                 start_value = qty * price_paid
@@ -183,10 +190,20 @@ class Portfolio:
         current_symbol = None
         with open(file_path, 'r') as file:
             reader = csv.reader(file)
-            header = next(reader)  # Skip the header row
+            header = None
+            while True:
+                header = next(reader)
+                is_ssr_format_csv = header and header[0] and header[0].startswith('Symbol') and header[1] and header[1].startswith('Last Price $')
+                is_os_format_csv = header and header[0] and header[0].startswith('Symbol') and header[1] and header[1].startswith('Qty #')
+                if is_ssr_format_csv or is_os_format_csv:
+                    break
+
+            # header = next(reader)  # Skip the header row
             map = determine_header_map(header)
             for row in reader:
-                # print('ddddd ', row[map['Date']].strip())
+                if row and row[0] == 'CASH':
+                    # reached end so break
+                    break
                 if is_date(row[0]) or is_date(row[map['Date']].strip()):
                     # try:
                         date = row[map['Date']].strip()
@@ -210,11 +227,14 @@ class Portfolio:
                         current_date = datetime.now()
                         years_held = (current_date - acquisition_date).days / 365.25
 
-                        # Calculate CAGR
-                        start_value = qty * price_paid
-                        end_value = value
+                        if years_held < YEARS_CUTOFF:
+                            cagr = None
+                        else:
+                            # Calculate CAGR
+                            start_value = qty * price_paid
+                            end_value = value
 
-                        cagr = calculate_cagr(start_value, end_value, years_held)
+                            cagr = calculate_cagr(start_value, end_value, years_held)
 
 
                         lot = LotInfo(current_symbol, date, qty, price_paid, days_gain, total_gain, total_gain_percent,
@@ -226,15 +246,13 @@ class Portfolio:
                     current_symbol = row[0].strip()
         return lots
 
-    def generate_worm(self, index=[], start_date=None):
-        self.generate_worm_single(start_date=start_date)
+    def generate_worm(self, index=[], start_date=None, end_date='08/10/2024'):
+        self.generate_worm_single(start_date=start_date, end_date=end_date)
         for ind in index:
-            print('=====iiii ', ind)
-            self.generate_worm_single(index=ind, start_date=start_date)
+            self.generate_worm_single(index=ind, start_date=start_date, end_date=end_date)
         plt.show()
 
-    def generate_worm_single(self, index=None, start_date=None):
-        end_date = '08/15/2024'
+    def generate_worm_single(self, index=None, start_date=None, end_date='08/10/2024'):
         all_dates = set([l.date for l in self.lots] + [end_date])
         starting_date = '01/01/2019'
 
@@ -274,7 +292,6 @@ class Portfolio:
                         index_cur_price = self.get_stock_price(index, convert_date_format(date.strftime("%m/%d/%Y")), cached=True)
                         cur_val = (l.price_paid * l.qty) / index_buy_price * index_cur_price
 
-                        # print('\ncoming 00000 ', date, l.date, index_buy_price, index_cur_price, l.value, cur_val)
 
                     # cur_val = l.price_paid * l.qty
                     if l.symbol == 'AAPL':
@@ -390,7 +407,7 @@ class Portfolio:
                     ts = str(hist.index[i])
                     ts = ts.split()[0]
                     self.ticker_cache[symbol][ts] = hist['Close'].iloc[i]
-                    # print('kkk ', hist['Date'].iloc[i], hist['Close'].iloc[i])
+
         else:
             return self.get_stock_price(symbol, add_one_day(date), itr - 1)
 

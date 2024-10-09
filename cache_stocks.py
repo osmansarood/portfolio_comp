@@ -14,19 +14,24 @@ PATHS = [
     # '/Users/osman/Downloads/Sellable_ssr_aug15.csv',
     # '/Users/osman/Downloads/chase_os_aug15.csv',
 
-    '/Users/osman/Downloads/PortfolioDownload_os_aug19.csv',  # Replace with your actual file path
-    '/Users/osman/Downloads/PortfolioDownload_ssr_aug19.csv',
-    '/Users/osman/Downloads/Sellable_ssr_aug19.csv',
-    '/Users/osman/Downloads/chase_os_aug19.csv',
+    # '/Users/osman/Downloads/PortfolioDownload_os_aug19.csv',  # Replace with your actual file path
+    # '/Users/osman/Downloads/PortfolioDownload_ssr_aug19.csv',
+    # '/Users/osman/Downloads/Sellable_ssr_aug19.csv',
+    # '/Users/osman/Downloads/chase_os_aug19.csv',
+
+    '/Users/osman/Downloads/PortfolioDownload_os_oct8.csv',  # Replace with your actual file path
+    '/Users/osman/Downloads/PortfolioDownload_ssr_oct8.csv',
+    '/Users/osman/Downloads/Sellable_ssr_oct8.csv',
+    '/Users/osman/Downloads/chase_os_sep02.csv',
 ]
 
 port = Portfolio()
 
-if __name__ == '__main__':
+def refresh_stock_data():
     for file_path in PATHS:
         port.add_lots(port.parse_csv(file_path, fetch_AAPL_price=False))
 
-    symbols = set()
+    symbols = set(['GLD', 'VGT', 'VTI', 'VOO', 'SPY', 'QQQ', '^IXIC', '^GSPC', '^DJI'])
     for l in port.lots:
         # print(f'{l.symbol} {l.date}')
         symbols.add(l.symbol)
@@ -42,3 +47,7 @@ if __name__ == '__main__':
         # break
 
     port.write_ticker_cache()
+
+
+if __name__ == '__main__':
+    refresh_stock_data()
