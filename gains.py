@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import json
 from portfolio import StockInfo, LotInfo, Portfolio, convert_date_format
 from cache_stocks import refresh_stock_data
+from pdf_to_csv import convert_to_csv
 
 def most_recent_working_day():
     today = datetime.today()
@@ -69,9 +70,11 @@ PATHS = [
     # '/Users/osman/Downloads/Sellable_ssr_sep29.csv',
     # '/Users/osman/Downloads/chase_os_sep02.csv',
 
-    '/Users/osman/Downloads/PortfolioDownload_os_oct8.csv',  # Replace with your actual file path
-    '/Users/osman/Downloads/PortfolioDownload_ssr_oct8.csv',
-    '/Users/osman/Downloads/Sellable_ssr_oct8.csv',
+    '/Users/osman/Downloads/PortfolioDownload_os_fidelity_june13.csv',
+    '/Users/osman/Downloads/PortfolioDownload_ssr_fidelity_june13.csv',
+    '/Users/osman/Downloads/PortfolioDownload_os_june10.csv',  # Replace with your actual file path
+    '/Users/osman/Downloads/PortfolioDownload_ssr_june10.csv',
+    # '/Users/osman/Downloads/Sellable_ssr_dec25.csv',
     '/Users/osman/Downloads/chase_os_sep02.csv',
 
 ]
@@ -82,7 +85,9 @@ if __name__ == '__main__':
 
     total_value = 0.0
     total_gain = 0.0
-    refresh_stock_data()
+    convert_to_csv('/Users/osman/Downloads/401_os.pdf', '/Users/osman/Downloads/PortfolioDownload_os_fidelity_june13.csv')
+    convert_to_csv('/Users/osman/Downloads/401_ssr.pdf', '/Users/osman/Downloads/PortfolioDownload_ssr_fidelity_june13.csv')
+    refresh_stock_data(PATHS)
 
     for file_path in PATHS:
         port.add_lots(port.parse_csv(file_path))
@@ -94,10 +99,11 @@ if __name__ == '__main__':
 
     # CURRENT_DATE = datetime.today().strftime('%m/%d/%Y')
     CURRENT_DATE = most_recent_working_day()
+    # CURRENT_DATE = '01/21/2025'
     print(f'Current date: {CURRENT_DATE}')
 
     for lot in port.lots:
-        print(f"Symbol: {lot.symbol}, Date: {lot.date}, Qty: {lot.qty}, Price Paid: {lot.price_paid}, "
+        print(f"[lot] Symbol: {lot.symbol}, Date: {lot.date}, Qty: {lot.qty}, Price Paid: {lot.price_paid}, "
               f"Days Gain: {lot.days_gain}, Total Gain: {lot.total_gain}, Total Gain %: {lot.total_gain_percent}, "
               f"Value: {lot.value}, CAGR: {lot.cagr}")
         if lot.symbol not in port.portfolio:
@@ -107,6 +113,9 @@ if __name__ == '__main__':
         # port.portfolio[lot.symbol].value += lot.value
         port.cache_ticker_data(lot.symbol)
         lot_cost_price = port.get_stock_price(lot.symbol, convert_date_format(lot.date, input_format='%m/%d/%Y'), cached=True)
+        port.portfolio[lot.symbol].total_cost += lot.qty * lot_cost_price
+        if lot.cagr:
+            port.portfolio[lot.symbol].cagr_weight += lot.cagr * lot.qty * lot_cost_price
         lot_current_price = port.get_stock_price(lot.symbol, convert_date_format(CURRENT_DATE, input_format='%m/%d/%Y'), cached=True)
         port.portfolio[lot.symbol].value += lot.qty * lot_current_price
         # port.portfolio[lot.symbol].gain += lot.total_gain
@@ -144,7 +153,7 @@ if __name__ == '__main__':
             values.append(perc_port)
             gains.append(stock.gain)
             total_values.append(stock.value)
-        print(f'Symbol:{sym} Value:{stock.value:.2f} gain:{stock.gain:.2f} cost:{stock.value-stock.gain:.2f} % portfolio:{perc_port:.2f}')
+        print(f'Symbol:{sym} Value:{stock.value:.2f} gain:{stock.gain:.2f} cost:{stock.value-stock.gain:.2f} % portfolio:{perc_port:.2f} CAGR:{stock.cagr_weight/stock.total_cost:.2%}')
 
     symbols.append(f'{others_count} others')
     values.append(other_perc_sum)
@@ -177,7 +186,7 @@ if __name__ == '__main__':
 
     for bar in gain_bars:
         yval = bar.get_height()
-        axes[0, 1].text(bar.get_x() + bar.get_width() / 2, yval, f'{yval:.0f}', ha='center', va='bottom')
+        axes[0, 1].text(bar.get_x() + bar.get_width() / 2, yval, f'{yval:,.0f}', ha='center', va='bottom')
 
     # Third plot: Total Values (bottom, spanning both columns)
     # Remove the extra axis in the second column
@@ -197,7 +206,13 @@ if __name__ == '__main__':
 
     for bar in total_bars.patches:
         yval = bar.get_height()
-        total_bars.text(bar.get_x() + bar.get_width() / 2, yval, f'{yval:.0f}', ha='center', va='bottom')
+        total_bars.text(
+            bar.get_x() + bar.get_width() / 2,
+            yval,
+            f'{yval:,.0f}',  # 🔹 Format with thousands separator
+            ha='center',
+            va='bottom'
+        )
 
     # Adjust layout to minimize white space
     plt.tight_layout()

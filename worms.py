@@ -36,9 +36,9 @@ PATHS = [
     # '/Users/osman/Downloads/Sellable_ssr_sep25.csv',
     # '/Users/osman/Downloads/chase_os_sep02.csv',
 
-    '/Users/osman/Downloads/PortfolioDownload_os_oct8.csv',  # Replace with your actual file path
-    '/Users/osman/Downloads/PortfolioDownload_ssr_oct8.csv',
-    '/Users/osman/Downloads/Sellable_ssr_oct8.csv',
+    '/Users/osman/Downloads/PortfolioDownload_os_apr12.csv',  # Replace with your actual file path
+    '/Users/osman/Downloads/PortfolioDownload_ssr_apr12.csv',
+    # '/Users/osman/Downloads/Sellable_ssr_dec25.csv',
     '/Users/osman/Downloads/chase_os_sep02.csv',
 ]
 

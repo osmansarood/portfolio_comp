@@ -1,5 +1,6 @@
 import csv
 from dataclasses import dataclass
+from collections import defaultdict
 from dateutil.parser import parse
 import yfinance as yf
 from datetime import datetime, timedelta
@@ -9,7 +10,7 @@ import pandas as pd
 
 
 SPECIAL_STOCKS = ['AAPL']
-YEARS_CUTOFF = 0.5
+YEARS_CUTOFF = 0.4
 
 def is_valid_date_format(date_str, format_str='%m/%d/%Y'):
     try:
@@ -27,12 +28,12 @@ def determine_header_map(header):
     expected_map = {
         'Symbol': ['Symbol', 'Date', 'Ticker'],
         'Quantity': ['Quantity', 'Qty #', 'Sellable Qty.'],
-        'Price Paid': ['Price Paid $', 'Unit Cost'],
+        'Price Paid': ['Price Paid $', 'Unit Cost', 'Average Cost Basis'],
         'Day Gain': ['Day\'s Gain $'],
-        'Date': ['Date Acquired', 'Acquisition Date'],
+        'Date': ['Date Acquired', 'Acquisition Date', 'Acquired'],
         'Total Gain': ['Total Gain $', 'Expected Gain/Loss', 'Unrealized G/L Amt.'],
         'Total Gain %': ['Total Gain %', 'Unrealized Gain/Loss (%)'],
-        'Value': ['Value $', 'Est. Market Value', 'Value'],
+        'Value': ['Value $', 'Est. Market Value', 'Value', 'Current Value'],
     }
     for id, col in enumerate(header):
         col_name = find_index(expected_map, col)
@@ -98,6 +99,8 @@ class StockInfo:
         self.qty = 0
         self.value = 0.0
         self.gain = 0.0
+        self.cagr_weight = 0.0
+        self.total_cost = 0.0
 
 
 class Portfolio:
@@ -111,15 +114,78 @@ class Portfolio:
         lots = self.lots
         total_weight = 0.0
         weighted_cagr_sum = 0.0
+
         for lot in lots:
             weight = lot.price_paid * lot.qty
+            # self.cagr_weight_per_symbol[lot.symbol] += weight
             total_weight += weight
             if lot.cagr:
                 weighted_cagr_sum += lot.cagr * weight
+                # self.cagr_weight_per_symbol[lot.symbol] += lot.cagr * weight
 
         if total_weight == 0:
             return 0.0
         return weighted_cagr_sum / total_weight
+
+    def parse_fidelty_csv(self, file_path):
+        lots = []
+        print(f'Reading file:{file_path}')
+        with open(file_path, 'r') as file:
+            reader = csv.reader(file)
+            header = next(reader)  # Skip the header row
+            map = determine_header_map(header)
+            for row in reader:
+                if row and 'The data and information' in row[0]:
+                    # file ended
+                    break
+                if row[map['Symbol']].strip() == 'QAJDS':
+                    # this represents cash in chase. pass on..
+                    continue
+                symbol = row[map['Symbol']].strip()
+                # date should in in format 08/09/2024
+
+                date = row[map['Date']].strip()
+                if not is_valid_date_format(row[map['Date']].strip(), format_str='%m/%d/%Y') and date != '':
+                    date = convert_date_format(row[map['Date']].strip(), '%d-%b-%Y', '%m/%d/%Y')
+
+
+                qty = float(row[map['Quantity']].strip())
+                price_paid = None
+                if 'Price Paid' in map:
+                    price_paid = float(row[map['Price Paid']].strip())
+                cleaned_value_str = row[map['Value']].strip().replace('$', '').replace(',', '')
+                value = float(cleaned_value_str)
+                cleaned_gain_str = row[map['Total Gain']].strip().replace('$', '').replace(',', '')
+                total_gain = float(cleaned_gain_str)
+
+                price_paid = self.get_stock_price(symbol, convert_date_format(date, input_format='%m/%d/%Y'), cached=True)
+                total_gain = value - (price_paid * qty)
+                days_gain = None
+                # not all files have days gain
+                if 'Day Gain' in map:
+                    days_gain = float(row[map['Day Gain']].strip())
+
+                total_gain_percent = None
+                if 'Total Gain %' in map and row[map['Total Gain %']]:
+                    total_gain_percent = float(row[map['Total Gain %']].strip())
+
+                # Calculate number of years from acquisition date to today
+                acquisition_date = parse(date)
+                current_date = datetime.now()
+                years_held = (current_date - acquisition_date).days / 365.25
+
+                if years_held < YEARS_CUTOFF:
+                    cagr = None
+
+                # Calculate CAGR
+                start_value = qty * price_paid
+                end_value = value
+                cagr = calculate_cagr(start_value, end_value, years_held)
+
+                lot = LotInfo(symbol, date, qty, price_paid, days_gain, total_gain, total_gain_percent,
+                              value, cagr)
+                lots.append(lot)
+        return lots
 
     def parse_grant_csv(self, file_path):
         lots = []
@@ -185,6 +251,8 @@ class Portfolio:
     def parse_csv(self, file_path, fetch_AAPL_price=True):
         if 'Sellable' in file_path or 'chase' in file_path:
             return self.parse_grant_csv(file_path, )
+        elif 'fidelity' in file_path:
+            return self.parse_fidelty_csv(file_path, )
         lots = []
         print(f'Reading file:{file_path}')
         current_symbol = None
