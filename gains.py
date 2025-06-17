@@ -73,7 +73,7 @@ PATHS = [
     '/Users/osman/Downloads/PortfolioDownload_os_fidelity_june13.csv',
     '/Users/osman/Downloads/PortfolioDownload_ssr_fidelity_june13.csv',
     '/Users/osman/Downloads/PortfolioDownload_os_june10.csv',  # Replace with your actual file path
-    '/Users/osman/Downloads/PortfolioDownload_ssr_june10.csv',
+    '/Users/osman/Downloads/PortfolioDownload_ssr_june17.csv',
     # '/Users/osman/Downloads/Sellable_ssr_dec25.csv',
     '/Users/osman/Downloads/chase_os_sep02.csv',
 
@@ -132,12 +132,15 @@ if __name__ == '__main__':
     symbols = []
     values = []
     gains = []
+    all_cagrs = []
     total_values = []
     others_count = 0
     other_perc_sum = 0.0
     other_gains = 0
     grand_total_values = 0.0
+    this_cagr = 0.0
     for sym, stock in sorted_stocks:
+        this_cagr = stock.cagr_weight / stock.total_cost * 100.0
         total_gain += stock.gain
         total_cost += stock.value - stock.gain
         perc_port = stock.value / total_value * 100
@@ -153,12 +156,14 @@ if __name__ == '__main__':
             values.append(perc_port)
             gains.append(stock.gain)
             total_values.append(stock.value)
+            all_cagrs.append(this_cagr)
         print(f'Symbol:{sym} Value:{stock.value:.2f} gain:{stock.gain:.2f} cost:{stock.value-stock.gain:.2f} % portfolio:{perc_port:.2f} CAGR:{stock.cagr_weight/stock.total_cost:.2%}')
 
     symbols.append(f'{others_count} others')
     values.append(other_perc_sum)
     gains.append(other_gains)
     total_values.append(grand_total_values)
+    all_cagrs.append(0.0)
 
 
     print(f'sum perc portfolio:{total_perc_port:.2f}')
@@ -171,7 +176,7 @@ if __name__ == '__main__':
     # First plot: Percentage of total portfolio (top-left)
     bars = axes[0, 0].bar(symbols, values, color='blue')
     axes[0, 0].set_title('Percentage of total portfolio')
-    axes[0, 0].set_xlabel('Stock Symbol')
+    # axes[0, 0].set_xlabel('Stock Symbol')
     axes[0, 0].set_ylabel('Percentage (%)')
 
     for bar in bars:
@@ -181,7 +186,7 @@ if __name__ == '__main__':
     # Second plot: Stock Gains (top-right)
     gain_bars = axes[0, 1].bar(symbols, gains, color='green')
     axes[0, 1].set_title('Stock Gains')
-    axes[0, 1].set_xlabel('Stock Symbol')
+    # axes[0, 1].set_xlabel('Stock Symbol')
     axes[0, 1].set_ylabel('Gains')
 
     for bar in gain_bars:
@@ -190,29 +195,38 @@ if __name__ == '__main__':
 
     # Third plot: Total Values (bottom, spanning both columns)
     # Remove the extra axis in the second column
-    fig.delaxes(axes[1, 0])
-    fig.delaxes(axes[1, 1])
+    # fig.delaxes(axes[1, 0])
+    # fig.delaxes(axes[1, 1])
 
     # Create a single plot spanning both columns
-    total_bars = fig.add_subplot(2, 1, 2)  # This makes a single subplot spanning the second row
-    total_bars.bar(symbols, total_values, color='orange')
-    total_bars.set_title('Total Values')
-    total_bars.set_xlabel('Stock Symbol')
-    total_bars.set_ylabel('Total Value ($)')
+    # total_bars = fig.add_subplot(2, 1, 2)  # This makes a single subplot spanning the second row
+    axes[1, 0].bar(symbols, total_values, color='orange')
+    axes[1, 0].set_title('Total Values')
+    # axes[1, 0].set_xlabel('Stock Symbol')
+    axes[1, 0].set_ylabel('Total Value ($)')
 
     # Remove the default numeric x-axis labels and set the stock symbols
     # total_bars.set_xticks(range(len(symbols)))  # Set positions of the symbols
     # total_bars.set_xticklabels(symbols)  # Replace numbers with symbols
 
-    for bar in total_bars.patches:
+    for bar in axes[1, 0].patches:
         yval = bar.get_height()
-        total_bars.text(
+        axes[1, 0].text(
             bar.get_x() + bar.get_width() / 2,
             yval,
             f'{yval:,.0f}',  # 🔹 Format with thousands separator
             ha='center',
             va='bottom'
         )
+
+    axes[1, 1].bar(symbols, all_cagrs, color='purple')
+    axes[1, 1].set_title('CAGR')
+    # axes[1, 1].set_xlabel('Stock Symbol')
+    axes[1, 1].set_ylabel('CAGR (%)')
+
+    for bar in axes[1, 1].patches:
+        yval = bar.get_height()
+        axes[1, 1].text(bar.get_x() + bar.get_width() / 2, yval, f'{yval:,.0f}', ha='center', va='bottom')
 
     # Adjust layout to minimize white space
     plt.tight_layout()

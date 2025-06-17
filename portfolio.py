@@ -10,7 +10,7 @@ import pandas as pd
 
 
 SPECIAL_STOCKS = ['AAPL']
-YEARS_CUTOFF = 0.4
+YEARS_CUTOFF = 0.1
 
 def is_valid_date_format(date_str, format_str='%m/%d/%Y'):
     try:
