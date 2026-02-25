@@ -4,3 +4,4 @@ yahoofinance
 tabulate
 python-dateutil
 yfinance
+pdfplumber

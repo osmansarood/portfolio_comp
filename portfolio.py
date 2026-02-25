@@ -11,6 +11,7 @@ import pandas as pd
 
 SPECIAL_STOCKS = ['AAPL']
 YEARS_CUTOFF = 0.1
+MONEY_MARKET_FUNDS = ['VMRXX', 'VUSXX', 'SPAXX', 'FDRXX', 'SWVXX', 'FDIC']
 
 def is_valid_date_format(date_str, format_str='%m/%d/%Y'):
     try:
@@ -129,7 +130,6 @@ class Portfolio:
 
     def parse_fidelty_csv(self, file_path):
         lots = []
-        print(f'Reading file:{file_path}')
         with open(file_path, 'r') as file:
             reader = csv.reader(file)
             header = next(reader)  # Skip the header row
@@ -174,22 +174,21 @@ class Portfolio:
                 current_date = datetime.now()
                 years_held = (current_date - acquisition_date).days / 365.25
 
+                # Calculate CAGR only if held long enough
                 if years_held < YEARS_CUTOFF:
                     cagr = None
-
-                # Calculate CAGR
-                start_value = qty * price_paid
-                end_value = value
-                cagr = calculate_cagr(start_value, end_value, years_held)
+                else:
+                    start_value = qty * price_paid
+                    end_value = value
+                    cagr = calculate_cagr(start_value, end_value, years_held)
 
                 lot = LotInfo(symbol, date, qty, price_paid, days_gain, total_gain, total_gain_percent,
                               value, cagr)
                 lots.append(lot)
-        return lots
+        return lots, 0.0
 
     def parse_grant_csv(self, file_path):
         lots = []
-        print(f'Reading file:{file_path}')
         with open(file_path, 'r') as file:
             reader = csv.reader(file)
             header = next(reader)  # Skip the header row
@@ -234,27 +233,27 @@ class Portfolio:
                 current_date = datetime.now()
                 years_held = (current_date - acquisition_date).days / 365.25
 
+                # Calculate CAGR only if held long enough
                 if years_held < YEARS_CUTOFF:
                     cagr = None
-
-                # Calculate CAGR
-                start_value = qty * price_paid
-                end_value = value
-                cagr = calculate_cagr(start_value, end_value, years_held)
+                else:
+                    start_value = qty * price_paid
+                    end_value = value
+                    cagr = calculate_cagr(start_value, end_value, years_held)
 
                 lot = LotInfo(symbol, date, qty, price_paid, days_gain, total_gain, total_gain_percent,
                               value, cagr)
                 lots.append(lot)
                 # print(lot)
-        return lots
+        return lots, 0.0
 
-    def parse_csv(self, file_path, fetch_AAPL_price=True):
+    def parse_csv(self, file_path, CURRENT_DATE, fetch_AAPL_price=True):
         if 'Sellable' in file_path or 'chase' in file_path:
             return self.parse_grant_csv(file_path, )
         elif 'fidelity' in file_path:
             return self.parse_fidelty_csv(file_path, )
         lots = []
-        print(f'Reading file:{file_path}')
+        cash_amount = 0.0
         current_symbol = None
         with open(file_path, 'r') as file:
             reader = csv.reader(file)
@@ -270,7 +269,14 @@ class Portfolio:
             map = determine_header_map(header)
             for row in reader:
                 if row and row[0] == 'CASH':
-                    # reached end so break
+                    # Extract cash amount from the row
+                    for i in range(len(row) - 1, -1, -1):
+                        try:
+                            if row[i] and row[i].strip():
+                                cash_amount = float(row[i].strip().replace(',', ''))
+                                break
+                        except:
+                            continue
                     break
                 if is_date(row[0]) or is_date(row[map['Date']].strip()):
                     # try:
@@ -278,7 +284,13 @@ class Portfolio:
 
                         qty = float(row[map['Quantity']].strip())
                         price_paid = float(row[map['Price Paid']].strip())
-                        value = float(row[map['Value']].strip())
+                        if CURRENT_DATE:
+                            lot_current_price = self.get_stock_price(current_symbol,
+                                                                 convert_date_format(CURRENT_DATE, input_format='%m/%d/%Y'),
+                                                                 cached=True)
+                            value = lot_current_price * qty
+                        else:
+                            value = float(row[map['Value']].strip())
                         total_gain = float(row[map['Total Gain']].strip())
                         if fetch_AAPL_price and current_symbol == 'AAPL':
                             price_paid = self.get_stock_price(current_symbol, convert_date_format(date), cached=True)
@@ -312,7 +324,7 @@ class Portfolio:
                     #     print(f"Error parsing row: {row} - {e}")
                 else:
                     current_symbol = row[0].strip()
-        return lots
+        return lots, cash_amount
 
     def generate_worm(self, index=[], start_date=None, end_date='08/10/2024'):
         self.generate_worm_single(start_date=start_date, end_date=end_date)
@@ -402,7 +414,6 @@ class Portfolio:
         for sym, data in self.ticker_cache.items():
             with open(f'ticker_data/{sym}.json', 'w') as fd:
                 json.dump(data, fd, indent=4)
-                print(f'Wrote data to {sym}.json')
 
     def plot_timeline(self):
         total_cost = 0
@@ -437,6 +448,10 @@ class Portfolio:
         plt.show()
 
     def get_stock_price(self, symbol, date, itr=5, end_date=None, cached=False):
+        # Money market funds always trade at $1.00
+        if symbol in MONEY_MARKET_FUNDS:
+            return 1.0
+
         if cached:
             if symbol not in self.ticker_cache:
                 self.cache_ticker_data(symbol)
@@ -444,7 +459,9 @@ class Portfolio:
         else:
             return self.get_stock_price_live(symbol, date, itr, end_date)
 
-    def get_stock_price_cached(self, symbol, date, itr=5, end_date=None):
+    def get_stock_price_cached(self, symbol, date, itr=10, end_date=None):
+        if itr <= 0:
+            raise ValueError(f"Could not find cached price for {symbol} on or after {date} (checked 10 days ahead). Cache may need refresh.")
         if date not in self.ticker_cache[symbol]:
             return self.get_stock_price_cached(symbol, add_one_day(date), itr - 1)
         return self.ticker_cache[symbol][date]
@@ -464,7 +481,6 @@ class Portfolio:
         hist = stock.history(start=date, end=end_d)
 
         if not hist.empty:
-            print(f'Price fetch {symbol} {date} {add_one_day(date)} {hist["Close"]}')
             if symbol not in self.ticker_cache:
                 self.ticker_cache[symbol] = {}
             if not end_d:
