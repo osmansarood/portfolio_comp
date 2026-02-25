@@ -39,6 +39,12 @@ UI_TOKENS = {
     "BrokerageLink", "Account"
 }
 
+# Money market funds (used as cash)
+MONEY_MARKET_FUNDS = {'FDRXX', 'SPAXX', 'VMRXX', 'VUSXX', 'SWVXX', 'FDIC'}
+
+# Pattern for money market fund cash line (e.g., "$26,787.45 5.74%" or "$56.61 0.10% --")
+CASH_PATTERN = re.compile(r'^\$([0-9,]+\.\d{2})\s+[\d.]+%')
+
 # -----------------------------
 # Helpers
 # -----------------------------
@@ -57,10 +63,12 @@ def clean_number(val):
 def convert_to_csv(pdf_path, output_csv):
     records = []
     account = "BrokerageLink"
+    total_cash = 0.0
 
     try:
         with pdfplumber.open(pdf_path) as pdf:
             current_symbol = None
+            is_money_market = False
 
             for page in pdf.pages:
                 text = page.extract_text()
@@ -77,9 +85,27 @@ def convert_to_csv(pdf_path, output_csv):
                     if stripped in UI_TOKENS:
                         continue
 
-                    # Case: strict symbol-only line (e.g., AVGO, NVDA)
+                    # Check if this line is a cash value for money market fund
+                    if is_money_market:
+                        cash_match = CASH_PATTERN.match(stripped)
+                        if cash_match:
+                            cash_value = float(cash_match.group(1).replace(',', ''))
+                            total_cash += cash_value
+                        is_money_market = False  # Reset after checking next line
+
+                    # Case: money market fund with description on same line (e.g., "FDRXX FIDELITY...")
+                    for mmf in MONEY_MARKET_FUNDS:
+                        if stripped.startswith(mmf + ' ') or stripped == mmf:
+                            is_money_market = True
+                            current_symbol = mmf
+                            break
+
+                    # Case: strict symbol-only line (e.g., AVGO, NVDA, FDRXX)
                     if VALID_SYMBOL_RE.match(stripped):
                         current_symbol = stripped
+                        # Check if it's a money market fund
+                        if stripped in MONEY_MARKET_FUNDS:
+                            is_money_market = True
                         continue
 
                     # Case: exact long-name mapping
@@ -115,7 +141,10 @@ def convert_to_csv(pdf_path, output_csv):
 
         df = pd.DataFrame(records)
         df.to_csv(output_csv, index=False)
-        print(f"✅ Exported {len(df)} rows to {output_csv}")
+        cash_msg = f" + ${total_cash:,.2f} cash" if total_cash > 0 else ""
+        print(f"✅ Exported {len(df)} rows{cash_msg} to {output_csv}")
+
+        return total_cash
 
     except FileNotFoundError:
         print(f"❌ File not found: {pdf_path}")

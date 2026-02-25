@@ -73,7 +73,7 @@ PATHS = [
     '/Users/osman/Downloads/PortfolioDownload_os_fidelity.csv',
     '/Users/osman/Downloads/PortfolioDownload_ssr_fidelity.csv',
     '/Users/osman/Downloads/PortfolioDownload_os_feb23.csv',  # Replace with your actual file path
-    '/Users/osman/Downloads/PortfolioDownload_ssr_feb23.csv',
+    '/Users/osman/Downloads/PortfolioDownload_ssr_feb24.csv',
     '/Users/osman/Downloads/Sellable_ssr_feb23.csv',
     '/Users/osman/Downloads/chase_os_dec03.csv',
 
@@ -85,18 +85,32 @@ if __name__ == '__main__':
 
     total_value = 0.0
     total_gain = 0.0
-    convert_to_csv('/Users/osman/Downloads/401_os_jan05.pdf', '/Users/osman/Downloads/PortfolioDownload_os_fidelity.csv')
-    convert_to_csv('/Users/osman/Downloads/401_ssr_feb23.pdf', '/Users/osman/Downloads/PortfolioDownload_ssr_fidelity.csv')
+
+    # Convert PDFs to CSV and capture cash from money market funds
+    cash_from_pdf = {}
+    pdf_cash_os = convert_to_csv('/Users/osman/Downloads/401_os_jan05.pdf', '/Users/osman/Downloads/PortfolioDownload_os_fidelity.csv')
+    if pdf_cash_os:
+        cash_from_pdf['401_os_fidelity (PDF)'] = pdf_cash_os
+
+    pdf_cash_ssr = convert_to_csv('/Users/osman/Downloads/401_ssr_feb23.pdf', '/Users/osman/Downloads/PortfolioDownload_ssr_fidelity.csv')
+    if pdf_cash_ssr:
+        cash_from_pdf['401_ssr_fidelity (PDF)'] = pdf_cash_ssr
+
     CURRENT_DATE = most_recent_working_day()
 
     print(f'Analyzing portfolio as of {CURRENT_DATE}...')
     refresh_stock_data(PATHS)
 
-    total_cash_from_csv = 0.0
+    total_cash_from_csv = sum(cash_from_pdf.values())
+    cash_by_file = dict(cash_from_pdf)  # Start with PDF cash
+
     for file_path in PATHS:
         lots, cash = port.parse_csv(file_path, CURRENT_DATE)
         port.add_lots(lots)
-        total_cash_from_csv += cash
+        if cash > 0:
+            file_name = file_path.split('/')[-1]
+            cash_by_file[file_name] = cash
+            total_cash_from_csv += cash
         weighted_average_cagr = port.calculate_weighted_average_cagr()
 
     for lot in port.lots:
@@ -188,6 +202,29 @@ if __name__ == '__main__':
             other_perc_sum += cash_perc_port
             grand_total_values += total_cash_value
         print(f'Symbol:Cash Value:{total_cash_value:.2f} gain:0.00 cost:{total_cash_value:.2f} % portfolio:{cash_perc_port:.2f} CAGR:N/A')
+
+        # Show detailed cash breakdown
+        print(f'\n{"="*80}')
+        print(f'CASH BREAKDOWN')
+        print(f'{"="*80}')
+
+        # Money market funds
+        mmf_total = sum(stock.value for stock in cash_holdings.values())
+        if mmf_total > 0:
+            print(f'Money Market Funds:        ${mmf_total:,.2f}')
+            for sym, stock in cash_holdings.items():
+                print(f'  {sym:8s}                 ${stock.value:,.2f}')
+
+        # Cash from CSV files
+        if total_cash_from_csv > 0:
+            print(f'\nCash (from CSV files):     ${total_cash_from_csv:,.2f}')
+            for file_name, cash_amount in cash_by_file.items():
+                # Shorten file name for display
+                display_name = file_name.replace('PortfolioDownload_', '').replace('.csv', '')
+                print(f'  {display_name:25s} ${cash_amount:,.2f}')
+
+        print(f'\nTotal Cash:                ${total_cash_value:,.2f}')
+        print(f'{"="*80}\n')
 
     symbols.append(f'{others_count} others')
     values.append(other_perc_sum)
