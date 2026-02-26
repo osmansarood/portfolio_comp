@@ -1,3 +1,12 @@
 data
 venv/
 .DS_Store
+
+# Personal financial data - DO NOT COMMIT
+CAGR_PROOF.md
+ticker_cache.json
+ticker_data/
+*.csv
+*.pdf
+*_chart.html
+*_chart.png
