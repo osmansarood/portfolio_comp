@@ -11,6 +11,14 @@ from portfolio import StockInfo, LotInfo, Portfolio, convert_date_format, MONEY_
 from cache_stocks import refresh_stock_data
 from pdf_to_csv import convert_to_csv
 
+# Import bank cash from config file (gitignored)
+try:
+    from config import BANK_CASH
+except ImportError:
+    # Default value if config.py doesn't exist
+    BANK_CASH = 0.0
+    print("Warning: config.py not found. Using BANK_CASH = 0.0")
+
 def most_recent_working_day():
     today = datetime.today()
     # If today is Saturday (weekday() == 5), go back to Friday
@@ -72,8 +80,8 @@ PATHS = [
 
     '/Users/osman/Downloads/PortfolioDownload_os_fidelity.csv',
     '/Users/osman/Downloads/PortfolioDownload_ssr_fidelity.csv',
-    '/Users/osman/Downloads/PortfolioDownload_os_feb23.csv',  # Replace with your actual file path
-    '/Users/osman/Downloads/PortfolioDownload_ssr_feb24.csv',
+    '/Users/osman/Downloads/PortfolioDownload_os_apr14.csv',  # Replace with your actual file path
+    '/Users/osman/Downloads/PortfolioDownload_ssr_apr14.csv',
     '/Users/osman/Downloads/Sellable_ssr_feb23.csv',
     '/Users/osman/Downloads/chase_os_dec03.csv',
 
@@ -88,11 +96,11 @@ if __name__ == '__main__':
 
     # Convert PDFs to CSV and capture cash from money market funds
     cash_from_pdf = {}
-    pdf_cash_os = convert_to_csv('/Users/osman/Downloads/401_os_jan05.pdf', '/Users/osman/Downloads/PortfolioDownload_os_fidelity.csv')
+    pdf_cash_os = convert_to_csv('/Users/osman/Downloads/401_os_mar3.pdf', '/Users/osman/Downloads/PortfolioDownload_os_fidelity.csv')
     if pdf_cash_os:
         cash_from_pdf['401_os_fidelity (PDF)'] = pdf_cash_os
 
-    pdf_cash_ssr = convert_to_csv('/Users/osman/Downloads/401_ssr_feb23.pdf', '/Users/osman/Downloads/PortfolioDownload_ssr_fidelity.csv')
+    pdf_cash_ssr = convert_to_csv('/Users/osman/Downloads/401_ssr_mar3.pdf', '/Users/osman/Downloads/PortfolioDownload_ssr_fidelity.csv')
     if pdf_cash_ssr:
         cash_from_pdf['401_ssr_fidelity (PDF)'] = pdf_cash_ssr
 
@@ -143,8 +151,8 @@ if __name__ == '__main__':
         else:
             stock_holdings[sym] = stock
 
-    # Calculate total cash value (money market funds + cash from CSV files)
-    total_cash_value = sum(stock.value for stock in cash_holdings.values()) + total_cash_from_csv
+    # Calculate total cash value (money market funds + cash from CSV files + bank cash)
+    total_cash_value = sum(stock.value for stock in cash_holdings.values()) + total_cash_from_csv + BANK_CASH
 
     total_cost = 0
     sorted_stocks = sorted(stock_holdings.items(), key=lambda item: item[1].value, reverse=True)
@@ -154,6 +162,42 @@ if __name__ == '__main__':
         total_value += stock.value
     total_value += total_cash_value  # Include cash in total portfolio value
 
+    # Build a list of all holdings including cash with their metrics
+    all_holdings = []
+    this_cagr = 0.0
+    for sym, stock in sorted_stocks:
+        # Calculate CAGR only if we have valid lots
+        this_cagr = (stock.cagr_weight / stock.total_cost * 100.0) if stock.total_cost > 0 else 0.0
+        total_gain += stock.gain
+        total_cost += stock.value - stock.gain
+        perc_port = stock.value / total_value * 100
+
+        all_holdings.append({
+            'symbol': sym,
+            'value': stock.value,
+            'gain': stock.gain,
+            'perc_port': perc_port,
+            'cagr': this_cagr
+        })
+        cagr_display = f'{stock.cagr_weight/stock.total_cost:.2%}' if stock.total_cost > 0 else 'N/A'
+        print(f'Symbol:{sym} Value:{stock.value:.2f} gain:{stock.gain:.2f} cost:{stock.value-stock.gain:.2f} % portfolio:{perc_port:.2f} CAGR:{cagr_display}')
+
+    # Add Cash to the holdings list
+    if total_cash_value > 0:
+        cash_perc_port = total_cash_value / total_value * 100
+        all_holdings.append({
+            'symbol': 'Cash',
+            'value': total_cash_value,
+            'gain': 0.0,
+            'perc_port': cash_perc_port,
+            'cagr': 0.0
+        })
+        print(f'Symbol:Cash Value:{total_cash_value:.2f} gain:0.00 cost:{total_cash_value:.2f} % portfolio:{cash_perc_port:.2f} CAGR:N/A')
+
+    # Sort all holdings by percentage of portfolio (descending)
+    all_holdings.sort(key=lambda x: x['perc_port'], reverse=True)
+
+    # Now build the chart data from sorted holdings
     total_perc_port = 0.0
     symbols = []
     values = []
@@ -164,44 +208,20 @@ if __name__ == '__main__':
     other_perc_sum = 0.0
     other_gains = 0
     grand_total_values = 0.0
-    this_cagr = 0.0
-    for sym, stock in sorted_stocks:
-        # Calculate CAGR only if we have valid lots
-        this_cagr = (stock.cagr_weight / stock.total_cost * 100.0) if stock.total_cost > 0 else 0.0
-        total_gain += stock.gain
-        total_cost += stock.value - stock.gain
-        perc_port = stock.value / total_value * 100
-        total_perc_port += perc_port
 
-        if perc_port < 1:
+    for holding in all_holdings:
+        total_perc_port += holding['perc_port']
+        if holding['perc_port'] < 1:
             others_count += 1
-            other_perc_sum += perc_port
-            other_gains += stock.gain
-            grand_total_values += stock.value
+            other_perc_sum += holding['perc_port']
+            other_gains += holding['gain']
+            grand_total_values += holding['value']
         else:
-            symbols.append(sym)
-            values.append(perc_port)
-            gains.append(stock.gain)
-            total_values.append(stock.value)
-            all_cagrs.append(this_cagr)
-        cagr_display = f'{stock.cagr_weight/stock.total_cost:.2%}' if stock.total_cost > 0 else 'N/A'
-        print(f'Symbol:{sym} Value:{stock.value:.2f} gain:{stock.gain:.2f} cost:{stock.value-stock.gain:.2f} % portfolio:{perc_port:.2f} CAGR:{cagr_display}')
-
-    # Add Cash as a separate line item
-    if total_cash_value > 0:
-        cash_perc_port = total_cash_value / total_value * 100
-        total_perc_port += cash_perc_port
-        if cash_perc_port >= 1:
-            symbols.append('Cash')
-            values.append(cash_perc_port)
-            gains.append(0.0)
-            total_values.append(total_cash_value)
-            all_cagrs.append(0.0)
-        else:
-            others_count += 1
-            other_perc_sum += cash_perc_port
-            grand_total_values += total_cash_value
-        print(f'Symbol:Cash Value:{total_cash_value:.2f} gain:0.00 cost:{total_cash_value:.2f} % portfolio:{cash_perc_port:.2f} CAGR:N/A')
+            symbols.append(holding['symbol'])
+            values.append(holding['perc_port'])
+            gains.append(holding['gain'])
+            total_values.append(holding['value'])
+            all_cagrs.append(holding['cagr'])
 
         # Show detailed cash breakdown
         print(f'\n{"="*80}')
@@ -223,6 +243,10 @@ if __name__ == '__main__':
                 display_name = file_name.replace('PortfolioDownload_', '').replace('.csv', '')
                 print(f'  {display_name:25s} ${cash_amount:,.2f}')
 
+        # Bank cash
+        if BANK_CASH > 0:
+            print(f'\nBank Cash:                 ${BANK_CASH:,.2f}')
+
         print(f'\nTotal Cash:                ${total_cash_value:,.2f}')
         print(f'{"="*80}\n')
 
@@ -232,6 +256,10 @@ if __name__ == '__main__':
     total_values.append(grand_total_values)
     all_cagrs.append(0.0)
 
+    # Create color lists for each chart (Cash bar will be green)
+    colors_blue = ['green' if sym == 'Cash' else 'blue' for sym in symbols]
+    colors_orange = ['green' if sym == 'Cash' else 'orange' for sym in symbols]
+    colors_purple = ['green' if sym == 'Cash' else 'purple' for sym in symbols]
 
     print(f'\n{"="*80}')
     print(f'PORTFOLIO SUMMARY')
@@ -246,7 +274,7 @@ if __name__ == '__main__':
     fig, axes = plt.subplots(2, 2, figsize=(14, 10), gridspec_kw={'height_ratios': [1, 1]})
 
     # First plot: Percentage of total portfolio (top-left)
-    bars = axes[0, 0].bar(symbols, values, color='blue')
+    bars = axes[0, 0].bar(symbols, values, color=colors_blue)
     axes[0, 0].set_title('Percentage of total portfolio')
     # axes[0, 0].set_xlabel('Stock Symbol')
     axes[0, 0].set_ylabel('Percentage (%)')
@@ -272,7 +300,7 @@ if __name__ == '__main__':
 
     # Create a single plot spanning both columns
     # total_bars = fig.add_subplot(2, 1, 2)  # This makes a single subplot spanning the second row
-    axes[1, 0].bar(symbols, total_values, color='orange')
+    axes[1, 0].bar(symbols, total_values, color=colors_orange)
     axes[1, 0].set_title('Total Values')
     # axes[1, 0].set_xlabel('Stock Symbol')
     axes[1, 0].set_ylabel('Total Value ($)')
@@ -291,7 +319,7 @@ if __name__ == '__main__':
             va='bottom'
         )
 
-    axes[1, 1].bar(symbols, all_cagrs, color='purple')
+    axes[1, 1].bar(symbols, all_cagrs, color=colors_purple)
     axes[1, 1].set_title('CAGR')
     # axes[1, 1].set_xlabel('Stock Symbol')
     axes[1, 1].set_ylabel('CAGR (%)')

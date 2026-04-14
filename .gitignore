@@ -10,3 +10,4 @@ ticker_data/
 *.pdf
 *_chart.html
 *_chart.png
+config.py
