@@ -7,7 +7,7 @@ import yfinance as yf
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 import json
-from portfolio import StockInfo, LotInfo, Portfolio, convert_date_format, MONEY_MARKET_FUNDS
+from portfolio import StockInfo, LotInfo, Portfolio, convert_date_format, MONEY_MARKET_FUNDS, YEARS_CUTOFF, calculate_cagr
 from cache_stocks import refresh_stock_data
 from pdf_to_csv import convert_to_csv
 
@@ -165,7 +165,13 @@ if __name__ == '__main__':
         for lot in lots:
             original_qty = lot.qty
             lot.qty = adjust_for_splits(lot.symbol, lot.qty, csv_file_date, CURRENT_DATE)
-            # No need to adjust price_paid - it's already split-adjusted from yfinance cache
+
+            # Recalculate CAGR with adjusted quantity (split doesn't affect CAGR calculation)
+            # CAGR should be based on price appreciation, not quantity changes from splits
+            if lot.cagr and lot.qty != original_qty:
+                # CAGR remains the same - it's based on price returns, not quantity
+                # The quantity adjustment was just accounting for the split
+                pass  # lot.cagr stays the same
 
         port.add_lots(lots)
         if cash > 0:
@@ -189,8 +195,16 @@ if __name__ == '__main__':
         lot.total_gain = lot.value - lot.price_paid * lot.qty
         port.portfolio[lot.symbol].gain += lot.value - lot.price_paid * lot.qty
 
-        # Only include lots with valid CAGR in both numerator AND denominator
-        if lot.cagr:
+        # Recalculate CAGR with current prices (lot.cagr from CSV may be stale)
+        acquisition_date = parse(lot.date)
+        current_date = datetime.now()
+        years_held = (current_date - acquisition_date).days / 365.25
+
+        if years_held >= YEARS_CUTOFF and lot_cost_price > 0:
+            start_value = lot.qty * lot_cost_price
+            end_value = lot.value
+            lot.cagr = calculate_cagr(start_value, end_value, years_held)
+
             port.portfolio[lot.symbol].total_cost += lot.qty * lot_cost_price
             port.portfolio[lot.symbol].cagr_weight += lot.cagr * lot.qty * lot_cost_price
 
