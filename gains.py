@@ -208,6 +208,9 @@ if __name__ == '__main__':
             port.portfolio[lot.symbol].total_cost += lot.qty * lot_cost_price
             port.portfolio[lot.symbol].cagr_weight += lot.cagr * lot.qty * lot_cost_price
 
+    # Recalculate weighted average CAGR after fixing individual lot CAGRs
+    weighted_average_cagr = port.calculate_weighted_average_cagr()
+
     # Separate cash (money market funds) from stocks
     cash_holdings = {}
     stock_holdings = {}
