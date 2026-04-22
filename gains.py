@@ -19,6 +19,47 @@ except ImportError:
     BANK_CASH = 0.0
     print("Warning: config.py not found. Using BANK_CASH = 0.0")
 
+# Known stock splits: {symbol: [(date, ratio), ...]}
+# date format: 'YYYY-MM-DD', ratio is the split multiplier
+STOCK_SPLITS = {
+    'VGT': [('2026-04-21', 8.0)],  # 8:1 split on 04/21/2026
+}
+
+def adjust_for_splits(symbol, quantity, csv_date_str, current_date_str):
+    """
+    Adjust quantity for stock splits that occurred between csv_date and current_date.
+    csv_date_str should be in 'MM/DD/YYYY' or 'YYYY-MM-DD' format.
+    current_date_str should be in 'MM/DD/YYYY' format.
+    Returns the adjusted quantity.
+    """
+    if symbol not in STOCK_SPLITS:
+        return quantity
+
+    from datetime import datetime
+
+    # Parse CSV date (could be from file metadata, using a conservative old date)
+    # For chase files, we know they're from December 2025
+    try:
+        if '/' in csv_date_str:
+            csv_date = datetime.strptime(csv_date_str, '%m/%d/%Y')
+        else:
+            csv_date = datetime.strptime(csv_date_str, '%Y-%m-%d')
+    except:
+        # If we can't parse, assume it's old enough to need adjustment
+        csv_date = datetime(2020, 1, 1)
+
+    current_date = datetime.strptime(current_date_str, '%m/%d/%Y')
+
+    adjusted_qty = quantity
+    for split_date_str, split_ratio in STOCK_SPLITS[symbol]:
+        split_date = datetime.strptime(split_date_str, '%Y-%m-%d')
+        # If the split occurred between CSV date and current date, adjust quantity
+        if csv_date < split_date <= current_date:
+            adjusted_qty *= split_ratio
+            print(f"  ✓ Adjusted {symbol} for {split_ratio}:1 split on {split_date_str}: {quantity} → {adjusted_qty} shares")
+
+    return adjusted_qty
+
 def most_recent_working_day():
     today = datetime.today()
     # If today is Saturday (weekday() == 5), go back to Friday
@@ -80,10 +121,10 @@ PATHS = [
 
     '/Users/osman/Downloads/PortfolioDownload_os_fidelity.csv',
     '/Users/osman/Downloads/PortfolioDownload_ssr_fidelity.csv',
-    '/Users/osman/Downloads/PortfolioDownload_os_apr14.csv',  # Replace with your actual file path
-    '/Users/osman/Downloads/PortfolioDownload_ssr_apr14.csv',
-    '/Users/osman/Downloads/Sellable_ssr_feb23.csv',
-    '/Users/osman/Downloads/chase_os_dec03.csv',
+    '/Users/osman/Downloads/PortfolioDownload_os_apr21.csv',  # Post VGT 8:1 split (04/21/2026)
+    '/Users/osman/Downloads/PortfolioDownload_ssr_apr21.csv',  # Post VGT 8:1 split
+    '/Users/osman/Downloads/Sellable_ssr_apr17.csv',
+    '/Users/osman/Downloads/chase_os_dec03.csv',  # Split adjustment applied automatically
 
 ]
 
@@ -114,6 +155,18 @@ if __name__ == '__main__':
 
     for file_path in PATHS:
         lots, cash = port.parse_csv(file_path, CURRENT_DATE)
+
+        # Adjust quantities for stock splits (for old CSV files)
+        # Determine CSV file date from filename or use a conservative date
+        csv_file_date = '12/03/2025' if 'dec03' in file_path.lower() else '01/01/2020'
+        if 'apr' in file_path.lower():
+            csv_file_date = '04/14/2026' if 'apr14' in file_path.lower() else '04/21/2026'
+
+        for lot in lots:
+            original_qty = lot.qty
+            lot.qty = adjust_for_splits(lot.symbol, lot.qty, csv_file_date, CURRENT_DATE)
+            # No need to adjust price_paid - it's already split-adjusted from yfinance cache
+
         port.add_lots(lots)
         if cash > 0:
             file_name = file_path.split('/')[-1]
